@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 package org.terasology.engine.rust;
+
 import fr.stardustenterprises.yanl.NativeLoader;
 
 public class TeraRusty {
@@ -11,6 +12,10 @@ public class TeraRusty {
 
     public static void Initialize() {
         loader.loadLibrary("tera-rusty", false);
+    }
+
+    private TeraRusty() {
+
     }
 
     // window init code

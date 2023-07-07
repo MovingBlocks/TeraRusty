@@ -4,6 +4,5 @@ pluginManagement.repositories {
     gradlePluginPortal()
 }
 
-rootProject.name = "tera-rusty"
 include("rust-library")
-include("library")
+include("rusty")
