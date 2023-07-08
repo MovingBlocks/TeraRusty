@@ -1,16 +1,17 @@
 
-// Copyright 2021 The Terasology Foundation
-// SPDX-License-Identifier: Apache-2.0
-
-
 pluginManagement.repositories {
     mavenLocal()
     gradlePluginPortal()
 }
 
-// Check to see if CR is embedded within Terasology, if so use nested paths
-println "rootProject for Rusty is: " + rootProject.name
+println "rootProject is: " + rootProject.name
 
-    println "Rusty is running standalone so using simple paths for includes"
-    include 'rust-library'
-    include 'lib'
+if (rootProject.name == 'Terasology') {
+    println "TeraRusty is embedded within Terasology, using nested paths"
+    include ':libs:TeraRusty:rust'
+    include ':libs:TeraRusty:rust-library'
+} else {
+    println "TeraRusty is running standalone so using simple paths for includes"
+    include("rust-library")
+    include("rust")
+}

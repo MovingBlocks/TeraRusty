@@ -1,0 +1,80 @@
+plugins {
+    id("java-library")
+    id("maven-publish")
+    id("fr.stardustenterprises.rust.importer")
+}
+
+dependencies {
+    implementation group: "fr.stardustenterprises", name: "yanl", version: "0.7.4"
+    implementation group: "fr.stardustenterprises", name: "plat4k", version: "1.6.2"
+    rust(project(":rust-library"))
+}
+
+version = "0.0.1-SNAPSHOT"
+group = "org.terasology.rust"
+
+apply from: "$rootDir/gradle/common.gradle"
+
+rustImport {
+    baseDir.set("/META-INF/natives")
+    layout.set("hierarchical")
+}
+
+//
+//java {
+//    withJavadocJar()
+//    withSourcesJar()
+//}
+//
+//
+//publishing {
+//    publications {
+//        mavenJava(MavenPublication) {
+//            artifactId = 'rust'
+//            from components.java
+//            versionMapping {
+//                usage('java-api') {
+//                    fromResolutionOf('runtimeClasspath')
+//                }
+//                usage('java-runtime') {
+//                    fromResolutionResult()
+//                }
+//            }
+//            pom {
+//                name = 'Tera Rusty'
+//                description = 'A concise description of my library'
+//                url = 'http://www.example.com/library'
+//                properties = [
+//                        myProp: "value",
+//                        "prop.with.dots": "anotherValue"
+//                ]
+//                licenses {
+//                    license {
+//                        name = 'The Apache License, Version 2.0'
+//                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+//                    }
+//                }
+//                developers {
+//                    developer {
+//                        id = 'johnd'
+//                        name = 'John Doe'
+//                        email = 'john.doe@example.com'
+//                    }
+//                }
+//                scm {
+//                    connection = 'scm:git:git://example.com/my-library.git'
+//                    developerConnection = 'scm:git:ssh://example.com/my-library.git'
+//                    url = 'http://example.com/my-library/'
+//                }
+//            }
+//        }
+//    }
+//    repositories {
+//        maven {
+//            // change URLs to point to your repos, e.g. http://my.org/repo
+//            def releasesRepoUrl = layout.buildDirectory.dir('repos/releases')
+//            def snapshotsRepoUrl = layout.buildDirectory.dir('repos/snapshots')
+//            url = version.endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
+//        }
+//    }
+//}
