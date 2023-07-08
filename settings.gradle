@@ -5,4 +5,3 @@ pluginManagement.repositories {
 }
 
 include("rust-library")
-include("rusty")

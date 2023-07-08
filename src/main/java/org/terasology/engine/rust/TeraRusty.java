@@ -10,7 +10,7 @@ public class TeraRusty {
     private static final NativeLoader loader = new NativeLoader.Builder()
         .build();
 
-    public static void Initialize() {
+    public static void initialize() {
         loader.loadLibrary("tera-rusty", false);
     }
 
