@@ -1,7 +1,16 @@
 
+// Copyright 2021 The Terasology Foundation
+// SPDX-License-Identifier: Apache-2.0
+
+
 pluginManagement.repositories {
     mavenLocal()
     gradlePluginPortal()
 }
 
-include("rust-library")
+// Check to see if CR is embedded within Terasology, if so use nested paths
+println "rootProject for Rusty is: " + rootProject.name
+
+    println "Rusty is running standalone so using simple paths for includes"
+    include 'rust-library'
+    include 'lib'
