@@ -23,7 +23,7 @@ rustImport {
 }
 
 version = "0.0.1-SNAPSHOT"
-group = "org.terasology.engine"
+group = "org.terasology.rust"
 
 java {
     withJavadocJar()
