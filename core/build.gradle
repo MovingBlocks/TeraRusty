@@ -18,7 +18,7 @@ ext {
     baseDir = "$rootDir/core"
 }
 
-version = "0.0.1-SNAPSHOT"
+version = "0.0.1"
 group = "org.terasology.rust"
 
 java {
@@ -53,13 +53,13 @@ task sourceJar(type: Jar) {
     description = "Create a JAR with all sources"
     from sourceSets.main.allSource
     from sourceSets.test.allSource
-    classifier = 'sources'
+//    classifier = 'sources'
 }
 
 task javadocJar(type: Jar, dependsOn: javadoc) {
     description = "Create a JAR with the JavaDoc for the java sources"
     from javadoc.destinationDir
-    classifier = 'javadoc'
+//    classifier = 'javadoc'
 }
 
 natives.each { module ->
@@ -108,10 +108,9 @@ task zipNatives(type: Zip){
     }
 
     destinationDirectory = file(buildDir)
-    archiveBaseName = 'RustyCore'
+    archiveBaseName = 'core'
 }
 
-//buildNatives.dependsOn generateSources
 zipNatives.dependsOn buildNatives
 
 javadoc {
@@ -132,6 +131,32 @@ publishing {
             artifact sourceJar
             artifact javadocJar
             artifact zipNatives
+
+            pom.withXml {
+                asNode().with {
+                    appendNode('name', "core")
+                    appendNode('description', "A Java Native Terasology Core Wrapper")
+                    appendNode('url', "http://www.example.com/project")
+                    appendNode('licenses').with {
+                        appendNode('license').with {
+                            appendNode('name', "The Apache License, Version 2.0")
+                            appendNode('url', "http://www.apache.org/licenses/LICENSE-2.0.txt")
+                        }
+                    }
+                    appendNode('developers').with {
+                        appendNode('developer').with {
+                            appendNode('id', "michaelpollind")
+                            appendNode('name', "Michael Pollind")
+                            appendNode('email', "mpollind@gmail.com")
+                        }
+                    }
+                    appendNode('scm').with {
+                        appendNode('connection', "https://github.com/MovingBlocks/JNBullet")
+                        appendNode('developerConnection', "git@github.com:MovingBlocks/JNBullet.git")
+                        appendNode('url', "https://github.com/MovingBlocks/JNBullet")
+                    }
+                }
+            }
 
             repositories {
                 maven {
