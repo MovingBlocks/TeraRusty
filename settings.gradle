@@ -8,10 +8,8 @@ println "rootProject is: " + rootProject.name
 
 if (rootProject.name == 'Terasology') {
     println "TeraRusty is embedded within Terasology, using nested paths"
-    include ':libs:TeraRusty:rust'
-    include ':libs:TeraRusty:rust-library'
+    include ':libs:TeraRusty:core'
 } else {
     println "TeraRusty is running standalone so using simple paths for includes"
-    include("rust-library")
-    include("rust")
+    include "core"
 }

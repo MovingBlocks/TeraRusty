@@ -1,0 +1,178 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+import org.apache.tools.ant.taskdefs.condition.Os
+ext {
+    if(Os.isFamily(Os.FAMILY_MAC)) {
+//        natives = ["macosx_amd64_clang"]
+    } else if (Os.isFamily(Os.FAMILY_UNIX)) {
+        natives = [
+                [target: "x86_64-unknown-linux-gnu", module: "linux_amd64"]
+        ]
+    } else {
+        throw new GradleException("This script only works on Linux or Mac")
+    }
+
+    baseDir = "$rootDir/core"
+}
+
+version = "0.0.1-SNAPSHOT"
+group = "org.terasology.rust"
+
+java {
+    sourceCompatibility(JavaVersion.VERSION_1_8)
+    targetCompatibility(JavaVersion.VERSION_1_8)
+}
+
+// We use both Maven Central and our own Artifactory instance, which contains module builds, extra libs, and so on
+repositories {
+    mavenCentral()
+
+    // Terasology Artifactory instance for libs not readily available elsewhere plus our own libs
+    maven {
+        def repoViaEnv = System.getenv()["RESOLUTION_REPO"]
+        if (rootProject.hasProperty("alternativeResolutionRepo")) {
+            // If the user supplies an alternative repo via gradle.properties then use that
+            name "from alternativeResolutionRepo property"
+            url alternativeResolutionRepo
+        } else if (repoViaEnv != null && repoViaEnv != "") {
+            name "from \$RESOLUTION_REPO"
+            url = repoViaEnv
+        } else {
+            // Our default is the main virtual repo containing everything except repos for testing Artifactory itself
+            name "Terasology Artifactory"
+            url "http://artifactory.terasology.org/artifactory/virtual-repo-live"
+            allowInsecureProtocol true  // 😱
+        }
+    }
+}
+
+task sourceJar(type: Jar) {
+    description = "Create a JAR with all sources"
+    from sourceSets.main.allSource
+    from sourceSets.test.allSource
+    classifier = 'sources'
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    description = "Create a JAR with the JavaDoc for the java sources"
+    from javadoc.destinationDir
+    classifier = 'javadoc'
+}
+
+natives.each { module ->
+    tasks.create(name: "native_${module["target"]}", type: Exec) {
+        description = "cargo ${module["target"]} "
+        executable "cargo"
+        workingDir "$baseDir/natives"
+        args "build", "--target=${module["target"]}", "--release"
+        doFirst {
+            mkdir "$baseDir/build/natives"
+        }
+        doLast {
+            copy {
+                from "$baseDir/natives/target/${module["target"]}/release"
+                include '*.so'
+                rename '(.+).so', "\$1_${module["module"]}.so"
+                into "$baseDir/build/natives"
+            }
+        }
+    }
+}
+
+task buildNatives{
+    description = "Builds Natives"
+    natives.each { module ->
+        dependsOn "native_${module["target"]}"
+    }
+}
+
+// TODO: outputs are not defined well enough yet for Gradle to skip this if already done (maybe more the natives task?)
+task zipNatives(type: Zip){
+    description 'Creates a zip archive that contains all TeraBullet native files'
+    from ("$baseDir/build/natives") {
+        include '*linux*'
+        into "linux"
+    }
+
+    from ("$baseDir/build/natives") {
+        include '*osx*'
+        into "macosx"
+    }
+
+    from ("$baseDir/build/natives") {
+        include '*windows*'
+        into "windows"
+    }
+
+    destinationDirectory = file(buildDir)
+    archiveBaseName = 'RustyCore'
+}
+
+//buildNatives.dependsOn generateSources
+zipNatives.dependsOn buildNatives
+
+javadoc {
+    failOnError = false
+}
+
+publish {
+    dependsOn  sourceJar, javadocJar, zipNatives
+}
+
+// Define the artifacts we want to publish (the .pom will also be included since the Maven plugin is active)
+publishing {
+    publications {
+        "TeraRustyCore"(MavenPublication) {
+            // Without this we get a .pom with no dependencies
+            from components.java
+
+            artifact sourceJar
+            artifact javadocJar
+            artifact zipNatives
+
+            repositories {
+                maven {
+                    name = 'TerasologyOrg'
+                    allowInsecureProtocol true // 😱 - no https on our Artifactory yet
+
+                    if (rootProject.hasProperty("publishRepo")) {
+                        // This first option is good for local testing, you can set a full explicit target repo in gradle.properties
+                        url = "http://artifactory.terasology.org/artifactory/$publishRepo"
+
+                        logger.info("Changing PUBLISH repoKey set via Gradle property to {}", publishRepo)
+                    } else {
+                        // Support override from the environment to use a different target publish org
+                        String deducedPublishRepo = System.getenv()["PUBLISH_ORG"]
+                        if (deducedPublishRepo == null || deducedPublishRepo == "") {
+                            // If not then default
+                            deducedPublishRepo = "libs"
+                        }
+
+                        // Base final publish repo on whether we're building a snapshot or a release
+                        if (project.version.endsWith('SNAPSHOT')) {
+                            deducedPublishRepo += "-snapshot-local"
+                        } else {
+                            deducedPublishRepo += "-release-local"
+                        }
+
+                        logger.info("The final deduced publish repo is {}", deducedPublishRepo)
+                        url = "http://artifactory.terasology.org/artifactory/$deducedPublishRepo"
+                    }
+
+                    if (rootProject.hasProperty("mavenUser") && rootProject.hasProperty("mavenPass")) {
+                        credentials {
+                            username = "$mavenUser"
+                            password = "$mavenPass"
+                        }
+                        authentication {
+                            basic(BasicAuthentication)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -4,15 +4,15 @@
 
 package org.terasology.engine.rust;
 
-import fr.stardustenterprises.yanl.NativeLoader;
+//import fr.stardustenterprises.yanl.NativeLoader;
 
 public class TeraRusty {
-    private static final NativeLoader loader = new NativeLoader.Builder()
-        .build();
+//    private static final NativeLoader loader = new NativeLoader.Builder()
+//        .build();
 
-    public static void initialize() {
-        loader.loadLibrary("tera-rusty", false);
-    }
+//    public static void initialize() {
+//        loader.loadLibrary("tera-rusty", false);
+//    }
 
     private TeraRusty() {
 

@@ -1,5 +1,5 @@
 [package]
-name = "tera-rusty"
+name = "rust-core"
 version = "0.1.0"
 edition = "2021"
 
