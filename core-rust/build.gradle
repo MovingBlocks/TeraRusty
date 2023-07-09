@@ -1,10 +1,20 @@
 plugins {
     id 'base'
-    id 'java-library'
     id 'maven-publish'
 }
 
+import org.apache.tools.ant.taskdefs.condition.Os
 ext {
+    if(Os.isFamily(Os.FAMILY_MAC)) {
+//        natives = ["macosx_amd64_clang"]
+    } else if (Os.isFamily(Os.FAMILY_UNIX)) {
+        natives = [
+                [target: "x86_64-unknown-linux-gnu", module: "linux_amd64"]
+        ]
+    } else {
+        throw new GradleException("This script only works on Linux or Mac")
+    }
+
     baseDir = "$rootDir/core"
 }
 
@@ -34,60 +44,70 @@ repositories {
     }
 }
 
-javadoc {
-    failOnError = false
+
+natives.each { module ->
+    tasks.create(name: "native_${module["target"]}", type: Exec) {
+        description = "cargo ${module["target"]} "
+        executable "cargo"
+        workingDir "$baseDir/natives"
+        args "build", "--target=${module["target"]}", "--release"
+        doFirst {
+            mkdir "$baseDir/build/natives"
+        }
+        doLast {
+            copy {
+                from "$baseDir/natives/target/${module["target"]}/release"
+                include '*.so'
+                rename '(.+).so', "\$1_${module["module"]}.so"
+                into "$baseDir/build/natives"
+            }
+        }
+    }
 }
 
-task sourceJar(type: Jar) {
-    description = "Create a JAR with all sources"
-    from sourceSets.main.allSource
-    from sourceSets.test.allSource
+task buildNatives{
+    description = "Builds Natives"
+    natives.each { module ->
+        dependsOn "native_${module["target"]}"
+    }
 }
 
-task javadocJar(type: Jar, dependsOn: javadoc) {
-    description = "Create a JAR with the JavaDoc for the java sources"
-    from javadoc.destinationDir
+// TODO: outputs are not defined well enough yet for Gradle to skip this if already done (maybe more the natives task?)
+task zipNatives(type: Zip){
+    description 'Creates a zip archive that contains all TeraBullet native files'
+    from ("$baseDir/build/natives") {
+        include '*linux*'
+        into "linux"
+    }
+
+    from ("$baseDir/build/natives") {
+        include '*osx*'
+        into "macosx"
+    }
+
+    from ("$baseDir/build/natives") {
+        include '*windows*'
+        into "windows"
+    }
+
+    destinationDirectory = file(buildDir)
+    archiveBaseName = 'core-rust'
 }
+
+zipNatives.dependsOn buildNatives
+
+artifacts.add('default', zipNatives)
 
 publish {
-    dependsOn  sourceJar, javadocJar
+    dependsOn zipNatives
 }
 
 // Define the artifacts we want to publish (the .pom will also be included since the Maven plugin is active)
 publishing {
     publications {
-        "TeraRustyCore"(MavenPublication) {
+        "TeraRustyCoreRust"(MavenPublication) {
             // Without this we get a .pom with no dependencies
-            from components.java
-
-            artifact sourceJar
-            artifact javadocJar
-
-            pom.withXml {
-                asNode().with {
-                    appendNode('name', "core")
-                    appendNode('description', "A Java Native Terasology Core Wrapper")
-                    appendNode('url', "http://www.example.com/project")
-                    appendNode('licenses').with {
-                        appendNode('license').with {
-                            appendNode('name', "The Apache License, Version 2.0")
-                            appendNode('url', "http://www.apache.org/licenses/LICENSE-2.0.txt")
-                        }
-                    }
-                    appendNode('developers').with {
-                        appendNode('developer').with {
-                            appendNode('id', "michaelpollind")
-                            appendNode('name', "Michael Pollind")
-                            appendNode('email', "mpollind@gmail.com")
-                        }
-                    }
-                    appendNode('scm').with {
-                        appendNode('connection', "https://github.com/MovingBlocks/JNBullet")
-                        appendNode('developerConnection', "git@github.com:MovingBlocks/JNBullet.git")
-                        appendNode('url', "https://github.com/MovingBlocks/JNBullet")
-                    }
-                }
-            }
+            artifact zipNatives
 
             repositories {
                 maven {
