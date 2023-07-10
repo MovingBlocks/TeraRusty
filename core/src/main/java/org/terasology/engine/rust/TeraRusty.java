@@ -4,15 +4,10 @@
 
 package org.terasology.engine.rust;
 
-//import fr.stardustenterprises.yanl.NativeLoader;
-
 public class TeraRusty {
-//    private static final NativeLoader loader = new NativeLoader.Builder()
-//        .build();
-
-//    public static void initialize() {
-//        loader.loadLibrary("tera-rusty", false);
-//    }
+    static {
+        NativeSupport.load("core_rust");
+    }
 
     private TeraRusty() {
 
@@ -21,5 +16,9 @@ public class TeraRusty {
     // window init code
     public static native void initializeWindowX11(long displayptr, long windowptr);
     public static native void initializeWindowWin32(long displayptr, long windowptr);
+
+    public static native void windowSizeChanged(int width, int height);
+
+    public static native void dispatch();
 
 }

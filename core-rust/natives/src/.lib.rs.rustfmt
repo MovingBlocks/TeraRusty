@@ -1,25 +1,23 @@
-use context::{ROOT, Renderer};
-use jni::{sys::{JNIEnv, jlong, jint}, objects::JClass};
+use context::Core;
+use jni::{sys::{JNIEnv, jlong}, objects::JClass};
 use raw_window_handle::{XlibDisplayHandle, XlibWindowHandle, HasRawWindowHandle, RawWindowHandle,  HasRawDisplayHandle, RawDisplayHandle, Win32WindowHandle, WindowsDisplayHandle};
 use std::ffi::c_void;
+use crate::context::CONTEXT;
 use futures::executor::block_on;
 use std::borrow::Cow;
 
+#[macro_use]
+extern crate lazy_static;
+
+mod win_init;
 mod context;
 
 
 #[no_mangle]
 pub extern "system" fn Java_org_terasology_engine_rust_TeraRusty_dispatch(_jni: JNIEnv, _class: JClass)  {
-    let core = ROOT.renderer.get().unwrap();
-    let pipeline = ROOT.test_pipeline.get().unwrap();
+    let context = CONTEXT.read().unwrap(); 
 
-    {
-        let guard = ROOT.swapchain_size.lock().unwrap(); 
-        if guard.x == 0 || guard.y == 0 {
-            return;
-        }
-    }
-
+    let core = &context.core.as_ref().unwrap();
 
     let frame = core.wgpu_surface
         .get_current_texture()
@@ -42,7 +40,7 @@ pub extern "system" fn Java_org_terasology_engine_rust_TeraRusty_dispatch(_jni: 
                     })],
                     depth_stencil_attachment: None,
                 });
-                rpass.set_pipeline(&pipeline);
+                rpass.set_pipeline(&context.test_pipeline.as_ref().unwrap());
                 rpass.draw(0..3, 0..1);
             }
 
@@ -69,6 +67,7 @@ unsafe impl HasRawDisplayHandle for XWindow {
 }
 
 async fn initialize(instance: wgpu::Instance, surface: wgpu::Surface) {
+    let mut context = CONTEXT.write().unwrap();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
@@ -125,38 +124,28 @@ async fn initialize(instance: wgpu::Instance, surface: wgpu::Surface) {
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
     });
-    
-    let renderer = Renderer {
+
+    let config = wgpu::SurfaceConfiguration {
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        format: swapchain_format,
+        width: 1920,
+        height: 1080,
+        present_mode: wgpu::PresentMode::Fifo,
+        alpha_mode: swapchain_capabilities.alpha_modes[0],
+        view_formats: vec![],
+    };
+
+    surface.configure(&device, &config);
+    let core = Core {
         wgpu_graphics_queue: queue,
         wgpu_device : device,
         wgpu_adapter : adapter,
         wgpu_instance : instance,
         wgpu_surface : surface
     };
-    let guard = ROOT.swapchain_size.lock().unwrap();
-    if guard.x > 0 && guard.y > 0 {
-        renderer.update_surface_size(guard.x, guard.y);
-    }
-    ROOT.renderer.set(renderer).unwrap();
-    ROOT.test_pipeline.set(render_pipeline).unwrap();
-
+    (*context).core = Some(core);
+    (*context).test_pipeline = Some(render_pipeline);
 }
-
-
-#[no_mangle]
-pub extern "system" fn Java_org_terasology_engine_rust_TeraRusty_windowSizeChanged(_jni: JNIEnv, _class: JClass, width: jint, height: jint)  {
-
-    if width == 0 || height == 0 {
-        return;
-    }
-
-    let mut guard = ROOT.swapchain_size.lock().unwrap();
-    *guard = glam::UVec2::new(width as u32, height as u32);
-    if let Some(renderer) = ROOT.renderer.get() {
-        renderer.update_surface_size(width as u32, height as u32);
-    }
-}
-
 
 #[no_mangle]
 pub extern "system" fn Java_org_terasology_engine_rust_TeraRusty_initializeWindowX11(_jni: JNIEnv, _class: JClass, display_ptr: jlong, window_ptr: jlong)  {
@@ -164,6 +153,8 @@ pub extern "system" fn Java_org_terasology_engine_rust_TeraRusty_initializeWindo
         window: XlibWindowHandle::empty(),
         display: XlibDisplayHandle::empty()
     };
+
+    print!("initializeWindowX11");
 
     win.window.window = window_ptr as u64;
     win.display.display = display_ptr as *mut c_void;
@@ -174,6 +165,9 @@ pub extern "system" fn Java_org_terasology_engine_rust_TeraRusty_initializeWindo
         Ok(surface) => surface,
         Err(err) => panic!("problem creating surface: {:?}", err),    
     };
+   // let mut context = CONTEXT.write().unwrap(); 
+   // context.wgpu_instance = Some(instance); 
+   // context.wgpu_surface = Some(surface);
     let future = initialize(instance, surface);
     block_on(future);
 }
@@ -196,9 +190,8 @@ unsafe impl HasRawDisplayHandle for Win32Window {
     }
 }
 
-
 #[no_mangle]
-pub extern "system" fn java_org_terasology_engine_rust_TeraRusty_initializeWindowWin32(_jni: JNIEnv, _class: JClass, window_ptr: jlong)  {
+pub extern "system" fn Java_org_terasology_engine_rust_TeraRusty_initializeWindowWin32(_jni: JNIEnv, _class: JClass, window_ptr: jlong)  {
     let mut win = Win32Window {
         window: Win32WindowHandle::empty(),
         display: WindowsDisplayHandle::empty()
@@ -214,4 +207,35 @@ pub extern "system" fn java_org_terasology_engine_rust_TeraRusty_initializeWindo
     let future = initialize(instance, surface);
     block_on(future);
 }
+//struct XWindow {
+//    window: XlibWindowHandle,
+//    display: XlibDisplayHandle
+//}
+//
+//unsafe impl HasRawWindowHandle for XWindow {
+//    fn raw_window_handle(&self) -> raw_window_handle::RawWindowHandle {
+//        return RawWindowHandle::Xlib(self.window);
+//    }
+//}
+//
+//unsafe impl HasRawDisplayHandle for XWindow {
+//    fn raw_display_handle(&self) -> raw_window_handle::RawDisplayHandle {
+//        return RawDisplayHandle::Xlib(self.display);
+//    }
+//}
+//
+//
+//#[no_mangle]
+//pub extern "system" fn Java_org_terasology_engine_native_InitializeWindowX11(_jni: JNIEnv, _class: JClass, display_ptr: jlong, window_ptr: jlong) {
+//    let mut win = XWindow {
+//        window: XlibWindowHandle::empty(),
+//        display: XlibDisplayHandle::empty()
+//    };
+//    win.window.window = window_ptr as u64;
+//    win.display.display = display_ptr as *mut c_void;
+//    
+//    let instance = wgpu::Instance::default();
+//    let surface = unsafe { instance.create_surface(&win) };
+//}
+
 

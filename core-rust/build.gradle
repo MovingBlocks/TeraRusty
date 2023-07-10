@@ -3,19 +3,27 @@ plugins {
     id 'maven-publish'
 }
 
+//configurations {
+//    rust
+//}
+//
+//dependencies {
+//    rust(fileTree('natives') { include "*.rs"})
+//}
+
 import org.apache.tools.ant.taskdefs.condition.Os
 ext {
     if(Os.isFamily(Os.FAMILY_MAC)) {
 //        natives = ["macosx_amd64_clang"]
     } else if (Os.isFamily(Os.FAMILY_UNIX)) {
         natives = [
-                [target: "x86_64-unknown-linux-gnu", module: "linux_amd64"]
+                [target: "x86_64-unknown-linux-gnu", module: "linux-amd64"]
         ]
     } else {
         throw new GradleException("This script only works on Linux or Mac")
     }
 
-    baseDir = "$rootDir/core"
+    baseDir = "$rootDir/core-rust"
 }
 
 version = "0.0.1"
@@ -50,15 +58,15 @@ natives.each { module ->
         description = "cargo ${module["target"]} "
         executable "cargo"
         workingDir "$baseDir/natives"
-        args "build", "--target=${module["target"]}", "--release"
+        args "build", "--target=${module["target"]}"
         doFirst {
             mkdir "$baseDir/build/natives"
         }
         doLast {
             copy {
-                from "$baseDir/natives/target/${module["target"]}/release"
+                from "$baseDir/natives/target/${module["target"]}/debug"
                 include '*.so'
-                rename '(.+).so', "\$1_${module["module"]}.so"
+                rename '(.+).so', "\$1-${module["module"]}.so"
                 into "$baseDir/build/natives"
             }
         }
@@ -66,6 +74,7 @@ natives.each { module ->
 }
 
 task buildNatives{
+    dependsOn fileTree("$baseDir/natives") // Input directory containing the source files
     description = "Builds Natives"
     natives.each { module ->
         dependsOn "native_${module["target"]}"
@@ -75,7 +84,7 @@ task buildNatives{
 // TODO: outputs are not defined well enough yet for Gradle to skip this if already done (maybe more the natives task?)
 task zipNatives(type: Zip){
     description 'Creates a zip archive that contains all TeraBullet native files'
-    from ("$baseDir/build/natives") {
+     from ("$baseDir/build/natives") {
         include '*linux*'
         into "linux"
     }

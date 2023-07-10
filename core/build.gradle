@@ -8,6 +8,14 @@ ext {
     baseDir = "$rootDir/core"
 }
 
+dependencies {
+//    compile group: 'org.joml', name: 'joml', version: '1.9.25'
+    api group: 'org.slf4j', name: 'slf4j-api', version: '1.7.21'
+    api group: 'net.sf.trove4j', name: 'trove4j', version: '3.0.3'
+    api "org.lwjgl:lwjgl-glfw"
+}
+
+
 version = "0.0.1"
 group = "org.terasology.rust"
 

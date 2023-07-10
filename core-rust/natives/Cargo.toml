@@ -1,5 +1,5 @@
 [package]
-name = "rust-core"
+name = "core-rust"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,4 +12,7 @@ raw-window-handle = "0.5.2"
 image = { version = "0.23.12", features = ["jpeg"], default-features = false }
 winit = "0.27"
 wgpu = "0.16.1"
-lazy_static = "1.4.0"
+futures = "0.3"
+once_cell = "1.18.0"
+slotmap = "1.0.6"
+glam = "0.24.1"
