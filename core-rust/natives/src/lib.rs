@@ -6,7 +6,9 @@ use futures::executor::block_on;
 use std::borrow::Cow;
 
 mod context;
-
+mod renderer_window;
+mod engine_kernel;
+mod java_util;
 
 #[no_mangle]
 pub extern "system" fn Java_org_terasology_engine_rust_TeraRusty_dispatch(_jni: JNIEnv, _class: JClass)  {
@@ -27,27 +29,26 @@ pub extern "system" fn Java_org_terasology_engine_rust_TeraRusty_dispatch(_jni: 
     let view = frame
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
-    let mut encoder =
-                core.wgpu_device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-            {
-                let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: None,
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                            store: true,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                });
-                rpass.set_pipeline(&pipeline);
-                rpass.draw(0..3, 0..1);
-            }
+    let mut encoder = core.wgpu_device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                    store: true,
+                },
+            })],
+            depth_stencil_attachment: None,
+        });
+        rpass.set_pipeline(&pipeline);
+        rpass.draw(0..3, 0..1);
+    }
 
-            core.wgpu_graphics_queue.submit(Some(encoder.finish()));
-            frame.present();
+    core.wgpu_graphics_queue.submit(Some(encoder.finish()));
+    frame.present();
 
 }
 
