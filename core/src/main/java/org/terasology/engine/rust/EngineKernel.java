@@ -3,28 +3,42 @@
 
 package org.terasology.engine.rust;
 
-public class EngineKernel implements AutoCloseable {
-    protected long rustPtr = 0;
-    public enum Backend {
-        DIRECTX11((byte)0b000001);
-
-        private final byte flag;
-        Backend(byte flag) {
-            this.flag = flag;
-        }
+public final  class EngineKernel implements Disposable {
+    private static final class JNI {
+        private static native long create();
+        private static native void drop(long rustPtr);
+        private static native void initSurfaceWin32(long kernel, long displayHandle, long windowHandle);
+        private static native void initSurfaceX11(long kernel, long displayHandle, long windowHandle);
+        private static native void resizeSurface(long kernel, int width, int height);
     }
 
-    public Core(long display, long window) {
-        this.rustPtr = createInst();
+    long rustKernelPtr = 0;
+
+    static {
+        NativeSupport.load("core_rust");
     }
-
-    private static native long createInst();
-    private static native void disposeInst(long rustPtr);
-
     @Override
-    public void close() throws Exception {
-        disposeInst(this.rustPtr);
-        this.rustPtr = 0;
+    public void dispose() {
+        JNI.drop(this.rustKernelPtr);
+        this.rustKernelPtr = 0;
     }
+
+    public EngineKernel() {
+        this.rustKernelPtr = JNI.create();
+    }
+
+    public void initializeWin32Surface(long display, long window) {
+        JNI.initSurfaceWin32(rustKernelPtr, display, window);
+    }
+    public void initializeWinX11Surface(long display, long window) {
+        JNI.initSurfaceX11(rustKernelPtr, display, window);
+    }
+
+    public void resizeSurface(int width, int height) {
+        JNI.resizeSurface(rustKernelPtr, width, height);
+    }
+
+
+
 }
 

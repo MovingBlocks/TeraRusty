@@ -1,44 +1,40 @@
 use jni::sys::jlong;
 use std::sync::Arc;
 
-pub trait JInstance {
-    type Item;
-    type JavaType;
-
-    fn from_jlong(ptr: jlong) -> Self::Item;
-    fn to_jlong(from: Self::Item) -> jlong;
-
-    fn java_create(from: Self) ->  jlong;
-    fn java_dispose(ptr: jlong);
+pub trait JavaHandle<T> {
+    fn from_handle(ptr: jlong) -> Option<T>;
+    fn to_handle(from: T) -> jlong;
+    fn drop_handle(ptr: jlong); 
 }
 
-pub trait JArcInstance {
-    type Item;
-    type JavaType;
+pub trait JavaHandleContainer<T> {
+    fn from_handle(&self, ptr: jlong) -> Option<T>;
+    fn to_handle(&self, from: T) -> jlong;
 
-    fn from_jlong(ptr: jlong) -> Arc<Self::Item> {
-        unsafe { 
-            let kernel = ptr as *const Self::Item;
-            Arc::increment_strong_count(kernel);
-            Arc::from_raw(kernel) 
-        }
-    }
+}
 
-    fn to_jlong(from: Arc<Self::Item>) -> jlong {
-       Arc::into_raw(from) as jlong 
+pub fn arc_from_handle<T>(ptr: jlong) -> Option<Arc<T>> {
+    if ptr == 0 {
+        panic!("invalid handle");
     }
     
-    fn java_create(from: Self::Item) ->  jlong {
-        let renderer = Arc::new(from);
-        Arc::into_raw(renderer) as jlong
-    }
-
-    fn java_dispose(ptr: jlong) {
-        if ptr == 0 {
-            return;
-        }
-        let kernel = ptr as *const Self::Item;
-        drop(unsafe { Arc::from_raw(kernel) });
+    unsafe { 
+        let kernel = ptr as *const T;
+        Arc::increment_strong_count(kernel);
+        Some(Arc::from_raw(kernel))
     }
 }
+
+pub fn arc_to_handle<T>(from: Arc<T>) -> jlong {
+    Arc::into_raw(from) as jlong 
+}
+
+pub fn arc_dispose_handle<T>(ptr: jlong) {
+    if ptr == 0 {
+        panic!("double free");
+    }
+    let kernel = ptr as *const T;
+    drop(unsafe { Arc::from_raw(kernel) });
+}
+
 
