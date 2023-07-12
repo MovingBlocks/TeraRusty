@@ -5,15 +5,14 @@ use crate::{ engine_kernel::EngineKernel, java_util::JavaHandle};
 use core::ffi::c_void;
 
 pub struct WindowSurface {
-    surface: wgpu::Surface,
-    adapter: wgpu::Adapter,
-    device: wgpu::Device,
-    graphics_queue: wgpu::Queue,
+    pub surface: wgpu::Surface,
+    pub adapter: wgpu::Adapter,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
 }
-
-fn create_surface(kernel: &mut EngineKernel, surface: wgpu::Surface ) {
-    let future =  async { 
-        let adapter = kernel.instance 
+impl WindowSurface {
+    async fn new(instance: &wgpu::Instance, surface: wgpu::Surface ) -> WindowSurface {
+        let adapter = instance 
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
                 force_fallback_adapter: false,
@@ -36,14 +35,14 @@ fn create_surface(kernel: &mut EngineKernel, surface: wgpu::Surface ) {
             )
             .await
             .expect("Failed to create device");
-        kernel.surface = Some(WindowSurface {
+        return WindowSurface {
             surface, 
             adapter, 
             device,
-            graphics_queue: queue,
-        });
-    };
-    block_on(future);
+            queue,
+        };
+    }
+
 }
 
 #[no_mangle]
@@ -78,13 +77,15 @@ pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_ini
     }
     window.window.hwnd = window_ptr as *mut c_void;
     
-    let surface_result = unsafe {kernel.read().unwrap().instance.create_surface(&window) };
+    let mut write_kernel = kernel.write().unwrap();
+    let surface_result = unsafe {write_kernel.instance().create_surface(&window) };
     let surface = match surface_result {
         Ok(surface) => surface,
         Err(err) => panic!("problem creating surface: {:?}", err),    
     };
-    let mut write_kernel = kernel.write().unwrap();
-    create_surface(&mut write_kernel, surface);
+
+    let surface = WindowSurface::new(write_kernel.instance(), surface);
+    write_kernel.surface = Some(block_on(surface));
 }
 
 #[no_mangle]
@@ -122,13 +123,15 @@ pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_ini
 
     window.window.window = window_ptr as u64;
     window.display.display = display_ptr as *mut c_void;
-    let surface_result = unsafe {kernel.read().unwrap().instance.create_surface(&window) };
+    
+    let mut write_kernel = kernel.write().unwrap();
+    let surface_result = unsafe {write_kernel.instance().create_surface(&window) };
     let surface = match surface_result {
         Ok(surface) => surface,
         Err(err) => panic!("problem creating surface: {:?}", err),    
     };
-    let mut write_kernel = kernel.write().unwrap();
-    create_surface(&mut write_kernel, surface);
+    let surface = WindowSurface::new(write_kernel.instance(), surface);
+    write_kernel.surface = Some(block_on(surface));
 }
 
 #[no_mangle]
