@@ -39,3 +39,7 @@ fn vs_main(
    return result;
 }
 
+@frag
+fn fs_main() -> {
+
+}
