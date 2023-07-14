@@ -124,7 +124,7 @@ impl WindowSurface {
             view_formats: vec![],
         });
         
-        self.surface.configure(&self.device, &self.surface_configuration.unwrap());
+        self.surface.configure(&self.device, &self.surface_configuration.as_ref().unwrap());
     }
 
 }
