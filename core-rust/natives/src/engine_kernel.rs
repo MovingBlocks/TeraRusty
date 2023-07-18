@@ -1,8 +1,7 @@
 use futures::executor::block_on;
 use jni::{sys::{JNIEnv, jlong, jint, jfloat}, objects::JClass};
 use std::sync::Arc;
-use crate::{java_util::{arc_from_handle, arc_to_handle, arc_dispose_handle, JavaHandle}, window_surface::WindowSurface, resources::ResourceManager,  ui::UserInterface} ;
-use std::sync::RwLock;
+use crate::{java_util::{arc_from_handle, arc_to_handle, arc_dispose_handle, JavaHandle}, window_surface::WindowSurface, ui::{UserInterface, Rect}, resource::texture_resource::TextureResource} ;
 use core::ffi::c_void;
 use std::cell::RefCell;
 
@@ -10,21 +9,53 @@ pub struct EngineKernel {
      pub instance: wgpu::Instance,
      pub surface: Option<WindowSurface>,
      pub user_interface: Option<UserInterface>,
-     pub resource: ResourceManager,
+
+     pub encoder: RefCell<Option<wgpu::CommandEncoder>>
 }
+
 
 pub type WeakEngineRef = std::sync::Weak<RefCell<EngineKernel>>; 
 impl EngineKernel {
 
-    pub fn cmd_prepare(&self) {
-       // if let Some(ui) = self.user_interface {
-       //     ui.cmd_prepare();
-       // }
+    pub fn cmd_prepare(&mut self) {
+        let Some(ref mut window) = self.surface else { return panic!("window is not prepared");};
+        
+        if let Some(ui) = self.user_interface.as_mut() {
+            ui.cmd_prepare();
+        }
+        self.encoder.replace( 
+            Some(window.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })));
     }
 
-    pub fn cmd_dispatch(&self) {
+    pub fn cmd_dispatch(&mut self) {
+        let Some(ref mut window) = self.surface else { return };
+        let frame = window
+            .surface
+            .get_current_texture()
+            .expect("Failed to acquire next swap chain texture");
 
-
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        
+        let mut encoder = self.encoder.replace(None).unwrap();
+        
+        let ui = self.user_interface.as_mut().unwrap(); 
+        let frame_texture = &frame.texture;
+        let size = frame_texture.size();
+        ui.cmd_dispatch(
+            &Rect {
+                min: [0.0,0.0],
+                max: [size.width as f32, size.height as f32],
+            },
+            &view,
+            &window.device,
+            &window.queue,
+            &mut encoder 
+        );
+         
+        window.queue.submit(std::iter::once(encoder.finish()));
+        frame.present();
     }
 
     #[no_mangle]
@@ -37,8 +68,8 @@ impl EngineKernel {
         EngineKernel::to_handle(Arc::new(RefCell::new(EngineKernel {
             instance: wgpu::Instance::default(),
             surface: None::<WindowSurface>,
-            resource: ResourceManager::new(),
-            user_interface: None 
+            user_interface: None,
+            encoder: RefCell::new(None)
         })))
     }
     #[no_mangle]
@@ -51,11 +82,19 @@ impl EngineKernel {
     }
     
     #[no_mangle]
-    pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_dispatch(_jni: JNIEnv, _class: JClass,
+    pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_cmdDispatch(_jni: JNIEnv, _class: JClass,
         kernel_ptr: jlong) {
         let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
-        let kernel = kernel_arc.borrow_mut();
-        let Some(surface) = kernel.surface.as_ref() else {panic!("surface invalid");};
+        let mut kernel = kernel_arc.borrow_mut();
+        kernel.cmd_dispatch();
+    }
+
+    #[no_mangle]
+    pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_cmdPrepare(_jni: JNIEnv, _class: JClass,
+        kernel_ptr: jlong) {
+        let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
+        let mut kernel = kernel_arc.borrow_mut();
+        kernel.cmd_prepare();
     }
 
     #[no_mangle]
@@ -82,9 +121,8 @@ impl EngineKernel {
     }
 
     fn initialize_subsystems(&mut self) {
-        //let Some(surface) = self.surface;
-        //self.user_interface = Some(UserInterface::new(&surface.device));
-
+        let ref mut window = &self.surface.as_ref().unwrap();
+        self.user_interface = Some(UserInterface::new(&window.device, &window.surface_configuration));
     }
     
     // User Interface
@@ -95,7 +133,50 @@ impl EngineKernel {
         let mut kernel = kernel_arc.borrow_mut();
         let Some(ui) = kernel.user_interface.as_mut() else {panic!("surface invalid");};
         
-        ui.cmd_set_crop(None);    
+        ui.cmd_set_crop(Some(Rect {
+            min: [min_x, min_y],
+            max: [max_x, max_y]
+        }));
+    }
+
+    #[no_mangle]
+    pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_cmdUIClearCrop(_jni: JNIEnv, _class: JClass,
+        kernel_ptr: jlong) {
+        let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
+        let mut kernel = kernel_arc.borrow_mut();
+        let Some(ui) = kernel.user_interface.as_mut() else {panic!("surface invalid");};
+        ui.cmd_set_crop(None);
+    }
+
+    #[no_mangle]
+    pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_cmdUIDrawTexture(_jni: JNIEnv, _class: JClass,
+        kernel_ptr: jlong,
+        tex_ptr: jlong,
+        uv_min_x: jfloat, uv_min_y: jfloat, uv_max_x: jfloat, uv_max_y: jfloat,
+        pos_min_x: jfloat, pos_min_y: jfloat, pos_max_x: jfloat, pos_max_y: jfloat) {
+        let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
+        let Some(text_resource_arc) = TextureResource::from_handle(tex_ptr) else {panic!("invalid tex resource")};
+        let mut kernel = kernel_arc.borrow_mut();
+        fn resolve_ui_window<'a>(kernel: &'a mut EngineKernel) -> (&'a mut WindowSurface, &'a mut UserInterface) {
+            return (kernel.surface.as_mut().unwrap(), kernel.user_interface.as_mut().unwrap() )
+        }
+        let (window, ui) = resolve_ui_window(&mut kernel);
+        
+
+        ui.cmd_draw_texture(
+            &window.queue,
+            &window.device,
+            &text_resource_arc,
+            &Rect {
+                min: [uv_min_x, uv_min_y],
+                max: [uv_max_x, uv_max_y]
+            },
+            &Rect {
+                min: [pos_min_x, pos_min_y],
+                max: [pos_max_x, pos_max_y]
+            }
+        );
+
     }
 }
 

@@ -1,44 +1,43 @@
 @group(0) @binding(0)
-var gui_textures: binding_array<texture_2d<f32>>;
+var default_sampler: sampler;
 @group(0) @binding(1)
-var sampler_textures: binding_array<sampler>;
+var tile_sampler: sampler;
 
 struct FrameUniform {
   view_transform: mat4x4<f32> 
 }
 
-@group(0) @binding(2)
+@group(1) @binding(0)
 var<uniform> u_frame: FrameUniform;
-
-struct TextureUniform {
-  transform: mat2x2<f32>,
-  uv_transform: mat2x2<f32>
-}
-
-//@group(0) @binding(4)
-//var<uniform> u_object: TextureUniform;
+@group(1) @binding(1)
+var gui_textures: binding_array<texture_2d<f32>, 32>;
 
 struct VertexOutput {
     @builtin(position) vertex: vec4<f32>,
     @location(0) uv: vec2<f32>,
+    @location(1) tex_config: vec2<u32>,
 };
 
-@vert
+@vertex
 fn vs_main(
   @location(0) position: vec2<f32>,
-  @location(1) uv: vec2<f32>
+  @location(1) uv: vec2<f32>,
+  @location(2) tex_config: vec2<u32>
 ) -> VertexOutput {
-  // vec2<f32> pos = u_frame.view_transform * position;
-  // vec2<f32> final_uv = u_object.uv_transform * uv;
-   
-   vec4<f32> pos = u_frame.view_transform * vec4<f32>(pos.x, pos.y, 0, 1);
+
+   let pos: vec4<f32> = u_frame.view_transform * vec4<f32>(position.x, position.y, 0.0, 1.0);
    var result: VertexOutput;
    result.vertex = pos;
-   result.uv = uv;   
+   result.uv = uv;
+   result.tex_config = tex_config;
    return result;
 }
 
-@frag
-fn fs_main() -> @location(0) vec4<f32> {
-    return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+
+@fragment
+fn fs_main(
+    @location(0) uv: vec2<f32>,
+    @location(1) tex_config: vec2<u32>
+) -> @location(0) vec4<f32> {
+    return textureSample(gui_textures[tex_config[0]], default_sampler, uv.xy);
 }

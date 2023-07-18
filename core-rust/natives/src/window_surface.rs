@@ -6,10 +6,25 @@ pub struct WindowSurface {
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
-    pub surface_configuration: Option<wgpu::SurfaceConfiguration>
+    pub surface_configuration: wgpu::SurfaceConfiguration
+}
+
+fn default_surface_configuration(surface: &wgpu::Surface, adapter: &wgpu::Adapter) -> wgpu::SurfaceConfiguration {
+    let swapchain_capabilities = surface.get_capabilities(&adapter);
+    let swapchain_format = swapchain_capabilities.formats[0];
+    return wgpu::SurfaceConfiguration {
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        format: swapchain_format,
+        width: 0 as u32,
+        height: 0 as u32,
+        present_mode: wgpu::PresentMode::Fifo,
+        alpha_mode: swapchain_capabilities.alpha_modes[0],
+        view_formats: vec![],
+    }
 }
 
 impl WindowSurface {
+
     pub async fn new(instance: &wgpu::Instance, surface: wgpu::Surface ) -> WindowSurface {
         let adapter = instance 
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -25,21 +40,32 @@ impl WindowSurface {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    features: wgpu::Features::empty(),
+                    features: 
+                        wgpu::Features::TEXTURE_BINDING_ARRAY |
+                        wgpu::Features::MAPPABLE_PRIMARY_BUFFERS,
                     // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
-                    limits: wgpu::Limits::downlevel_webgl2_defaults()
-                        .using_resolution(adapter.limits()),
+                    limits: {
+                        let mut limits = wgpu::Limits::downlevel_webgl2_defaults()
+                        .using_resolution(adapter.limits());
+                        limits.max_samplers_per_shader_stage = 1048576; // this is very high 
+                        limits.max_sampled_textures_per_shader_stage = 128;
+                        limits
+                    },
                 },
                 None,
             )
             .await
             .expect("Failed to create device");
+        let default_configuration = default_surface_configuration(
+            &surface,
+            &adapter
+        );
         return WindowSurface {
             surface, 
             adapter, 
             device,
             queue,
-            surface_configuration: None
+            surface_configuration: default_configuration 
         };
     }
 
@@ -111,20 +137,15 @@ impl WindowSurface {
         WindowSurface::new(instance, surface).await
     }
 
+
+
     pub fn resize_surface(&mut self, width: i32, height: i32) {
-        let swapchain_capabilities = self.surface.get_capabilities(&self.adapter);
-        let swapchain_format = swapchain_capabilities.formats[0];
-        self.surface_configuration = Some(wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: swapchain_format,
+        self.surface_configuration = wgpu::SurfaceConfiguration {
             width: width as u32,
             height: height as u32,
-            present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode: swapchain_capabilities.alpha_modes[0],
-            view_formats: vec![],
-        });
-        
-        self.surface.configure(&self.device, &self.surface_configuration.as_ref().unwrap());
+            ..default_surface_configuration(&self.surface, &self.adapter)
+        };
+        self.surface.configure(&self.device, &self.surface_configuration);
     }
 
 }
