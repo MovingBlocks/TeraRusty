@@ -1,5 +1,6 @@
-use raw_window_handle::{XlibWindowHandle, XlibDisplayHandle, HasRawWindowHandle, RawWindowHandle, HasRawDisplayHandle, RawDisplayHandle, Win32WindowHandle, WindowsDisplayHandle};
 use core::ffi::c_void;
+
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle, RawDisplayHandle, RawWindowHandle, Win32WindowHandle, WindowsDisplayHandle, XlibDisplayHandle, XlibWindowHandle};
 
 pub struct WindowSurface {
     pub surface: wgpu::Surface,
@@ -34,7 +35,17 @@ impl WindowSurface {
                 compatible_surface: Some(&surface),
             }).await
             .expect("Failed to find an appropriate adapter");
-
+        let adapter_info = adapter.get_info();
+        //TODO may be pass it to java's logger?
+        println!("Used device info: ");
+        println!("name: {}", adapter_info.name);
+        println!("vendor: {}", adapter_info.vendor);
+        println!("device_type: {:?}", adapter_info.device_type);
+        println!("device: {}", adapter_info.device);
+        println!("backend: {:?}", adapter_info.backend);
+        println!("driver: {:?}", adapter_info.driver);
+        println!("driver_info: {}", adapter_info.driver_info);
+        println!("===============");
         // Create the logical device and command queue
         let (device, queue) = adapter
             .request_device(
@@ -47,8 +58,10 @@ impl WindowSurface {
                     limits: {
                         let mut limits = wgpu::Limits::downlevel_webgl2_defaults()
                         .using_resolution(adapter.limits());
-                        limits.max_samplers_per_shader_stage = 1048576; // this is very high 
-                        limits.max_sampled_textures_per_shader_stage = 128;
+                        limits.max_samplers_per_shader_stage =
+                            adapter.limits().max_samplers_per_shader_stage;
+                        limits.max_sampled_textures_per_shader_stage =
+                            adapter.limits().max_sampled_textures_per_shader_stage;
                         limits
                     },
                 },

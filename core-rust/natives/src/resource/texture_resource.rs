@@ -1,13 +1,14 @@
-use crate::engine_kernel::EngineKernel;
-use crate::java_util::{arc_dispose_handle, arc_from_handle, arc_to_handle, JavaHandle, set_joml_vector2f};
-use glam::u32;
-use jni::objects::{JByteBuffer, JClass, JObject};
-use jni::sys::{jint, jlong};
-use jni::JNIEnv;
-use once_cell::sync::{Lazy, OnceCell};
 use std::convert::From;
 use std::sync::Arc;
-use wgpu::{util::DeviceExt};
+
+use glam::u32;
+use jni::JNIEnv;
+use jni::objects::{JByteBuffer, JClass, JObject};
+use jni::sys::{jint, jlong};
+use wgpu::util::DeviceExt;
+
+use crate::engine_kernel::EngineKernel;
+use crate::java_util::{arc_dispose_handle, arc_from_handle, arc_to_handle, JavaHandle, set_joml_vector2f};
 
 pub struct TextureResource {
     pub texture: wgpu::Texture,
@@ -114,8 +115,8 @@ impl TextureResource {
         desc: JObject<'local>,
         buffer: JByteBuffer<'local>
     ) -> jlong {
-        let kernel_arc = EngineKernel::from_handle(kernel_ptr).expect("kernel invalid");
-        let mut kernel = kernel_arc.borrow_mut();
+        let arc = EngineKernel::from_handle(kernel_ptr).expect("kernel invalid");
+        let kernel = arc.borrow();
         let buf_size = env
             .get_direct_buffer_capacity(&buffer)
             .expect("Unable to get address to direct buffer. Buffer must be allocated direct.");
@@ -123,7 +124,7 @@ impl TextureResource {
             .get_direct_buffer_address(&buffer)
             .expect("Unable to get address to direct buffer. Buffer must be allocated direct.");
         let slice = unsafe {std::slice::from_raw_parts(buf, buf_size)};
-        let window = kernel.surface.as_mut().unwrap();
+        let window = kernel.surface.as_ref().unwrap();
         let texture_desc = wgpu_texture_desc(env, &desc); 
 
         let texture = window.device.create_texture_with_data(
