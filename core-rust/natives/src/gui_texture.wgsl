@@ -20,12 +20,12 @@ struct VertexOutput {
 
 @vertex
 fn vs_main(
-  @location(0) position: vec2<f32>,
+  @location(0) position: vec3<f32>,
   @location(1) uv: vec2<f32>,
   @location(2) tex_config: vec2<u32>
 ) -> VertexOutput {
 
-   let pos: vec4<f32> = u_frame.view_transform * vec4<f32>(position.x, position.y, 0.0, 1.0);
+   let pos: vec4<f32> = u_frame.view_transform * vec4<f32>(position.x, position.y, position.z, 1.0);
    var result: VertexOutput;
    result.vertex = pos;
    result.uv = uv;

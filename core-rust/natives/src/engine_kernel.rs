@@ -1,5 +1,6 @@
 use futures::executor::block_on;
 use jni::{sys::{JNIEnv, jlong, jint, jfloat}, objects::JClass};
+use wgpu::CommandEncoder;
 use std::sync::Arc;
 use crate::{java_util::{arc_from_handle, arc_to_handle, arc_dispose_handle, JavaHandle}, window_surface::WindowSurface, ui::{UserInterface, Rect}, resource::texture_resource::TextureResource} ;
 use core::ffi::c_void;
@@ -12,7 +13,6 @@ pub struct EngineKernel {
 
      pub encoder: RefCell<Option<wgpu::CommandEncoder>>
 }
-
 
 pub type WeakEngineRef = std::sync::Weak<RefCell<EngineKernel>>; 
 impl EngineKernel {
@@ -43,6 +43,8 @@ impl EngineKernel {
         let ui = self.user_interface.as_mut().unwrap(); 
         let frame_texture = &frame.texture;
         let size = frame_texture.size();
+        
+        
         ui.cmd_dispatch(
             &Rect {
                 min: [0.0,0.0],
@@ -77,8 +79,18 @@ impl EngineKernel {
         kernel_ptr: jlong, width: jint, height: jint) {
         let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
         let mut kernel = kernel_arc.borrow_mut();
-        let Some(surface) = kernel.surface.as_mut() else {panic!("surface not initialized");};
+        fn resolve_helper<'a>(kernel: &'a mut EngineKernel) -> (&'a mut Option<WindowSurface>, &'a mut Option<UserInterface>) {
+            return (&mut kernel.surface, &mut kernel.user_interface)
+        }
+        let (surface, ui) = resolve_helper(&mut kernel);
+
+        let Some(surface) = surface.as_mut() else {panic!("surface not initialized");};
         surface.resize_surface(width, height);
+        
+        if let Some(ui) = ui.as_mut() {
+
+            ui.resize_surface(&surface.device, &glam::IVec2::new(width,height));
+        }
     }
     
     #[no_mangle]
@@ -157,12 +169,11 @@ impl EngineKernel {
         let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
         let Some(text_resource_arc) = TextureResource::from_handle(tex_ptr) else {panic!("invalid tex resource")};
         let mut kernel = kernel_arc.borrow_mut();
-        fn resolve_ui_window<'a>(kernel: &'a mut EngineKernel) -> (&'a mut WindowSurface, &'a mut UserInterface) {
-            return (kernel.surface.as_mut().unwrap(), kernel.user_interface.as_mut().unwrap() )
+        fn resolve_ui_window<'a>(kernel: &'a mut EngineKernel) -> (&'a mut RefCell<Option<wgpu::CommandEncoder>>, &'a mut WindowSurface, &'a mut UserInterface) {
+            return (&mut kernel.encoder, kernel.surface.as_mut().unwrap(), kernel.user_interface.as_mut().unwrap() )
         }
-        let (window, ui) = resolve_ui_window(&mut kernel);
+        let (encoder, window, ui) = resolve_ui_window(&mut kernel);
         
-
         ui.cmd_draw_texture(
             &window.queue,
             &window.device,

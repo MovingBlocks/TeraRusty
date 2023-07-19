@@ -42,7 +42,7 @@ impl WindowSurface {
                     label: None,
                     features: 
                         wgpu::Features::TEXTURE_BINDING_ARRAY |
-                        wgpu::Features::MAPPABLE_PRIMARY_BUFFERS,
+                        wgpu::Features::MAPPABLE_PRIMARY_BUFFERS, 
                     // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
                     limits: {
                         let mut limits = wgpu::Limits::downlevel_webgl2_defaults()

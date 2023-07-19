@@ -47,9 +47,11 @@ public final class EngineKernel implements Disposable {
     public void initializeWin32Surface(long display, long window) {
         JNI.initSurfaceWin32(rustKernelPtr, display, window);
     }
+
     public void initializeWinX11Surface(long display, long window) {
         JNI.initSurfaceX11(rustKernelPtr, display, window);
     }
+
     public void resizeSurface(int width, int height) {
         JNI.resizeSurface(rustKernelPtr, width, height);
     }
@@ -64,19 +66,20 @@ public final class EngineKernel implements Disposable {
         }
     }
 
-    public void cmdUIDrawTexture(TeraTexture tex,Rectanglef uv, Rectanglef pos) {
+    public void cmdUIDrawTexture(TeraTexture tex, Rectanglef uv, Rectanglef pos) {
         JNI.cmdUIDrawTexture(
                 rustKernelPtr,
                 tex.rustTexturePtr,
                 uv.minX(), uv.minY(), uv.maxX(), uv.maxY(),
                 pos.minX(), pos.minY(), pos.maxX(), pos.maxY()
-                );
+        );
     }
 
     // Dispatch
     public void cmdPrepare() {
         JNI.cmdPrepare(rustKernelPtr);
     }
+
     public void cmdDispatch() {
         JNI.cmdDispatch(rustKernelPtr);
     }
@@ -88,6 +91,7 @@ public final class EngineKernel implements Disposable {
 
     private static final class JNI {
         private static native long create();
+
         private static native void drop(long rustPtr);
 
         private static native void initSurfaceWin32(long kernel, long displayHandle, long windowHandle);
@@ -97,15 +101,18 @@ public final class EngineKernel implements Disposable {
         private static native void resizeSurface(long kernel, int width, int height);
 
         private static native void cmdPrepare(long kernel);
+
         private static native void cmdDispatch(long kernel);
 
         // User Interface
         public static native void cmdUISetCrop(long kernel, float minX, float minY, float maxX, float maxY);
+
         public static native void cmdUIClearCrop(long kernel);
+
         public static native void cmdUIDrawTexture(long kernel,
-           long texturePtr,
-           float uvMinX, float uvMinY, float uvMaxX, float uvMaxY,
-            float posMinX, float posMinY, float posMaxX, float posMaxY);
+                                                   long texturePtr,
+                                                   float uvMinX, float uvMinY, float uvMaxX, float uvMaxY,
+                                                   float posMinX, float posMinY, float posMaxX, float posMaxY);
     }
 }
 

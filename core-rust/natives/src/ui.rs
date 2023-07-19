@@ -1,6 +1,8 @@
 use crate::engine_kernel::{EngineKernel, WeakEngineRef};
 use crate::java_util::{arc_dispose_handle, arc_from_handle, arc_to_handle, JavaHandle};
 use jni::sys::{jlong};
+use smallvec::smallvec;
+use wgpu::TextureViewDescriptor;
 use std::{borrow::Cow, f32::consts, mem};
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -31,7 +33,7 @@ impl Rect {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct PositionTexCoord {
-    pos: [f32; 2],
+    pos: [f32; 3],
     uv: [f32; 2],
     tex_index: u32, 
     sampler_index: u32 
@@ -63,13 +65,29 @@ impl Rect {
             max: [0.0,0.0]
         }
     }
+
+    pub fn intersect(&self, rect: &Rect) -> bool{
+        return self.min[0] < rect.max[0] && self.max[0] > rect.min[0] &&
+                self.max[1] > rect.min[1] && self.min[1] < rect.max[1];
+    }
+    
+    pub fn combine(&self, other: &Rect) -> Rect {
+        let mut result = Rect::zero();
+        result.min[0] = if self.min[0] < other.min[0] { self.min[0] } else { other.min[0]};
+        result.min[1] = if self.min[1] < other.min[1] { self.min[1] } else { other.min[1]};
+        result.max[0] = if self.max[0] > other.max[0] { self.max[0] } else { other.max[0]};
+        result.max[1] = if self.max[1] > other.max[1] { self.max[1] } else { other.max[1]};
+        return result;
+    }
+
 }
 
 #[derive(Clone)]
 struct TextureDrawGroup {
-   
     cursor_index: u32,
     index_count: u32,
+
+    texture_rects: smallvec::SmallVec<[Rect;10]>,
 
     vertex_offset_start: u64,
     vertex_offset_end: u64,
@@ -78,8 +96,6 @@ struct TextureDrawGroup {
     index_offset_start: u64,
     index_offset_end: u64,
     index_buffer: std::rc::Rc<wgpu::Buffer>,
-
-
 
     crop: Option<Rect>
 }
@@ -113,6 +129,7 @@ pub struct UserInterface {
     immediate_index_buffer: Option<Rc<wgpu::Buffer>>,
     vertex_buffer_offset: u64,
     index_buffer_offset: u64,
+    z_depth: f32,
 
     gui_texture_bind_group_layout: wgpu::BindGroupLayout,
     gui_texture_const_group: wgpu::BindGroup,
@@ -126,6 +143,9 @@ pub struct UserInterface {
 
     textures: smallvec::SmallVec<[Arc<TextureResource>; RESERVED_TEXTURE_VIEW]>,
     dummy_texture: wgpu::Texture, 
+
+    depth_view: RefCell<Option<wgpu::TextureView>>
+    
 }
 
 
@@ -157,6 +177,7 @@ impl UserInterface {
         self.textures.clear();
         self.vertex_buffer_offset = 0;
         self.index_buffer_offset = 0;
+        self.z_depth = 1.0;
     }
 
     pub fn cmd_dispatch(&mut self, 
@@ -165,8 +186,10 @@ impl UserInterface {
         device: &wgpu::Device, 
         queue: &wgpu::Queue, 
         encoder: &mut wgpu::CommandEncoder) {
-        {
 
+        let Some(depth_view) = self.depth_view.get_mut() else { return}; 
+
+        {
             // Create and update the transform matrix for the current frame.
             // This is required to adapt to vulkan coordinates.
             let size = quad.size();
@@ -174,14 +197,15 @@ impl UserInterface {
             let offset_y = quad.min[1] / size[1];
             let per_frame = GuiTexturePerFrameUniform  {
                 view_transform: [
-                    [2.0 / size[0], 0.0, 0.0, 0.0],
-                    [0.0, 2.0 / -size[1], 0.0, 0.0],
-                    [0.0, 0.0, 1.0, 0.0],
+                    [2.0 / size[0]        , 0.0                 , 0.0, 0.0],
+                    [0.0                  , 2.0 / -size[1]      , 0.0, 0.0],
+                    [0.0                  , 0.0                 , 1.0, 0.0],
                     [-1.0 - offset_x * 2.0, 1.0 + offset_y * 2.0, 0.0, 1.0],
                 ]
             }; 
             queue.write_buffer(&self.frame_uniform, 0, bytemuck::bytes_of(&per_frame));
         } 
+
 
         encoder.push_debug_group("ui pass");
         {
@@ -220,10 +244,16 @@ impl UserInterface {
                         store: true
                     },
                 })],
-                depth_stencil_attachment: None 
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
+                    }),
+                    stencil_ops: None,
+                }),
             });
         
-
             rpass.set_bind_group(0, &self.gui_texture_const_group, &[]);
             rpass.set_bind_group(1, &self.gui_texture_bind_group.as_ref().unwrap(), &[]);
             for group in self.draw_groups.iter() {
@@ -250,13 +280,41 @@ impl UserInterface {
         self.crop = rect;
     }
 
+    pub fn resize_surface(&mut self, device: &wgpu::Device, size: &glam::IVec2) {
+        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: size.x as u32,
+                height: size.y as u32,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format:wgpu::TextureFormat::Depth16Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            label: None,
+            view_formats: &[],
+        });
+        self.depth_view.replace(Some(depth_texture.create_view(&wgpu::TextureViewDescriptor::default())));
+    }
+
     fn evaluate_draw_group(&mut self, new_group: UIDrawGroup) -> bool {
+        fn test_bound_rects(rects: &[Rect], test: &Rect) -> bool {
+            for rec in rects.iter() {
+                if rec.intersect(test) {
+                    return true;
+                }
+            }
+            return false
+        }
+
+                        //test_bound_rects(current.texture_rects.as_slice(), &new_group.texture_rects[0]) && 
         let group_valid = match self.draw_groups.last() {
             Some(current_draw_group) => {
                 match (current_draw_group, &new_group) {
                     (UIDrawGroup::Texture(current), UIDrawGroup::Texture(new_group)) => {
-                       //current.texture_index == new_group.texture_index
-                        current.crop == new_group.crop
+                        false // batched geometry causes artifacting 
+                        && current.crop == new_group.crop
                         && Rc::ptr_eq(&current.vertex_buffer, &new_group.vertex_buffer)
                         && Rc::ptr_eq(&current.index_buffer, &new_group.index_buffer)
                     }
@@ -324,40 +382,42 @@ impl UserInterface {
         let request_vertex_buffer_size = (std::mem::size_of::<PositionTexCoord>() * NUM_VERTS) as u64;
         let request_index_buffer_size = (std::mem::size_of::<u32>() * NUM_INDCIES) as u64;
         let (vb_buffer_start_offset, ib_buffer_start_offset) = self.request_buffer_immediate(device, request_vertex_buffer_size, request_index_buffer_size);
-        let _is_new_group = self.evaluate_draw_group(UIDrawGroup::Texture(TextureDrawGroup {
+        let is_new_group = self.evaluate_draw_group(UIDrawGroup::Texture(TextureDrawGroup {
             vertex_buffer: self.immediate_vertex_buffer.as_ref().unwrap().clone(),
             index_buffer: self.immediate_index_buffer.as_ref().unwrap().clone(),
             vertex_offset_start: vb_buffer_start_offset,
             vertex_offset_end: vb_buffer_start_offset,
             index_offset_start: ib_buffer_start_offset,
             index_offset_end: ib_buffer_start_offset,
+            texture_rects: smallvec![pos.clone()], 
             crop: self.crop,
             index_count: 0,
             cursor_index: 0
         }));
         let UIDrawGroup::Texture(ref mut current_group) = self.draw_groups.last_mut().unwrap();
 
+        self.z_depth -= 0.0001;
         let vertex_data: &[PositionTexCoord; NUM_VERTS] = &[
             PositionTexCoord {
-                pos: pos.min,
+                pos: [pos.min[0], pos.min[1], self.z_depth],
                 uv: uv.min,
                 tex_index: tex_index as u32,
                 sampler_index: 0
             },
             PositionTexCoord {
-                pos: [pos.max[0], pos.min[1]],
+                pos: [pos.max[0], pos.min[1], self.z_depth],
                 uv: [uv.max[0], uv.min[1]], 
                 tex_index: tex_index as u32,
                 sampler_index: 0
             },
             PositionTexCoord {
-                pos: pos.max,
+                pos: [pos.max[0],pos.max[1], self.z_depth],
                 uv: uv.max,
                 tex_index: tex_index as u32,
                 sampler_index: 0
             },
             PositionTexCoord {
-                pos: [pos.min[0], pos.max[1]],
+                pos: [pos.min[0], pos.max[1], self.z_depth],
                 uv: [uv.min[0], uv.max[1]],   
                 tex_index: tex_index as u32,
                 sampler_index: 0
@@ -371,7 +431,10 @@ impl UserInterface {
         ];
         current_group.index_count += 6;
         current_group.cursor_index += 4;
-
+        if !is_new_group {
+             current_group.texture_rects.push(pos.clone());
+        }
+        
         //self.immediate_vertex_buffer.as_ref().unwrap().slice(current_group.vertex_offset_end..(current_group.vertex_offset_end + request_vertex_buffer_size + 1)).get_mapped_range_mut().copy_from_slice(bytemuck::cast_slice(vertex_data));
         queue.write_buffer(&self.immediate_vertex_buffer.as_ref().unwrap(), current_group.vertex_offset_end, bytemuck::cast_slice(vertex_data));
         queue.write_buffer(&self.immediate_index_buffer.as_ref().unwrap(), current_group.index_offset_end, bytemuck::cast_slice(index_data));
@@ -405,7 +468,6 @@ impl UserInterface {
             label: Some("default sampler"),
             ..Default::default()
         });
-
 
         let gui_texture_const_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { 
             label: None,
@@ -479,16 +541,15 @@ impl UserInterface {
                 entry_point: "vs_main",
                 buffers: &[
                     wgpu::VertexBufferLayout {
-                        array_stride: 24,
+                        array_stride: 28,
                         step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Uint32x2],
+                        attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2, 2 => Uint32x2],
                     },
                 ]
             },
             fragment: Some(wgpu::FragmentState {
                 module: &gui_texture_shader ,
                 entry_point: "fs_main",
-                //targets: &[Some(surface.format.into())],
                 targets: &[Some(wgpu::ColorTargetState {
                     format: surface.format.into(),
                     blend: Some(wgpu::BlendState {
@@ -498,21 +559,25 @@ impl UserInterface {
                             operation: wgpu::BlendOperation::Add,
                         },
                         alpha: wgpu::BlendComponent {
-                            src_factor: wgpu::BlendFactor::One,
+                            src_factor: wgpu::BlendFactor::Zero,
                             dst_factor: wgpu::BlendFactor::One,
-                            operation: wgpu::BlendOperation::Max,
+                            operation: wgpu::BlendOperation::Add,
                         },
                     }),
-                    write_mask: wgpu::ColorWrites::RED |wgpu::ColorWrites::GREEN | wgpu::ColorWrites::BLUE
+                    write_mask: wgpu::ColorWrites::RED | wgpu::ColorWrites::GREEN | wgpu::ColorWrites::BLUE
                 })],
             }),
-            primitive: wgpu::PrimitiveState {
-                front_face: wgpu::FrontFace::Cw,
-                ..Default::default()
-            },
+            primitive: wgpu::PrimitiveState::default(),
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                // We don't use stencil.
+                format: wgpu::TextureFormat::Depth16Unorm,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
         });
 
         let frame_uniform = device.create_buffer(&wgpu::BufferDescriptor {
@@ -539,6 +604,8 @@ impl UserInterface {
 
 
         UserInterface {
+            z_depth: 1.0,
+            depth_view: RefCell::new(None),
             crop: None,
             gui_texture_const_group,
             frame_uniform,
@@ -553,7 +620,7 @@ impl UserInterface {
             default_sampler,
             gui_texture_bind_group_layout,
             textures: smallvec::SmallVec::new(),
-            draw_groups: Vec::new() 
+            draw_groups: Vec::new(),
         }
     }
 
