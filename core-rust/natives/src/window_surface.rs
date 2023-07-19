@@ -47,8 +47,10 @@ impl WindowSurface {
                     limits: {
                         let mut limits = wgpu::Limits::downlevel_webgl2_defaults()
                         .using_resolution(adapter.limits());
-                        limits.max_samplers_per_shader_stage = 1048576; // this is very high 
-                        limits.max_sampled_textures_per_shader_stage = 128;
+                        limits.max_samplers_per_shader_stage =
+                            adapter.limits().max_samplers_per_shader_stage;
+                        limits.max_sampled_textures_per_shader_stage =
+                            adapter.limits().max_sampled_textures_per_shader_stage;
                         limits
                     },
                 },
