@@ -165,7 +165,8 @@ impl EngineKernel {
         kernel_ptr: jlong,
         tex_ptr: jlong,
         uv_min_x: jfloat, uv_min_y: jfloat, uv_max_x: jfloat, uv_max_y: jfloat,
-        pos_min_x: jfloat, pos_min_y: jfloat, pos_max_x: jfloat, pos_max_y: jfloat) {
+        pos_min_x: jfloat, pos_min_y: jfloat, pos_max_x: jfloat, pos_max_y: jfloat,
+        tint_color: jint) {
         let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
         let Some(text_resource_arc) = TextureResource::from_handle(tex_ptr) else {panic!("invalid tex resource")};
         let mut kernel = kernel_arc.borrow_mut();
@@ -185,7 +186,8 @@ impl EngineKernel {
             &Rect {
                 min: [pos_min_x, pos_min_y],
                 max: [pos_max_x, pos_max_y]
-            }
+            },
+            tint_color as u32
         );
 
     }

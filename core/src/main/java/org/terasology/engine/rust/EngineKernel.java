@@ -66,12 +66,23 @@ public final class EngineKernel implements Disposable {
         }
     }
 
+    public void cmdUIDrawTexture(TeraTexture tex, Rectanglef uv, Rectanglef pos, int tintColor) {
+        JNI.cmdUIDrawTexture(
+                rustKernelPtr,
+                tex.rustTexturePtr,
+                uv.minX(), uv.minY(), uv.maxX(), uv.maxY(),
+                pos.minX(), pos.minY(), pos.maxX(), pos.maxY(),
+                tintColor
+        );
+    }
+
     public void cmdUIDrawTexture(TeraTexture tex, Rectanglef uv, Rectanglef pos) {
         JNI.cmdUIDrawTexture(
                 rustKernelPtr,
                 tex.rustTexturePtr,
                 uv.minX(), uv.minY(), uv.maxX(), uv.maxY(),
-                pos.minX(), pos.minY(), pos.maxX(), pos.maxY()
+                pos.minX(), pos.minY(), pos.maxX(), pos.maxY(),
+                0xffffffff
         );
     }
 
@@ -112,7 +123,8 @@ public final class EngineKernel implements Disposable {
         public static native void cmdUIDrawTexture(long kernel,
                                                    long texturePtr,
                                                    float uvMinX, float uvMinY, float uvMaxX, float uvMaxY,
-                                                   float posMinX, float posMinY, float posMaxX, float posMaxY);
+                                                   float posMinX, float posMinY, float posMaxX, float posMaxY,
+                                                   int tintColor);
     }
 }
 

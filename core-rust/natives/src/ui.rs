@@ -35,6 +35,7 @@ impl Rect {
 struct PositionTexCoord {
     pos: [f32; 2],
     uv: [f32; 2],
+    color: u32 
 }
 
 #[repr(C)]
@@ -141,7 +142,6 @@ pub struct UserInterface {
 
     textures: smallvec::SmallVec<[(Arc<TextureResource>, wgpu::TextureView); RESERVED_TEXTURE_VIEW]>,
 
-    //depth_view: RefCell<Option<wgpu::TextureView>>
 }
 
 
@@ -361,7 +361,7 @@ impl UserInterface {
         return self.textures.len() - 1;
     }
 
-    pub fn cmd_draw_texture(&mut self, queue: &wgpu::Queue, device: &wgpu::Device, tex: &Arc<TextureResource>, uv: &Rect, pos: &Rect) {
+    pub fn cmd_draw_texture(&mut self, queue: &wgpu::Queue, device: &wgpu::Device, tex: &Arc<TextureResource>, uv: &Rect, pos: &Rect, tint_color: u32) {
         const NUM_VERTS: usize = 4;
         const NUM_INDCIES: usize = 6;
         let tex_index = self.resolve_texture_index(tex);
@@ -369,7 +369,7 @@ impl UserInterface {
         let request_vertex_buffer_size = (std::mem::size_of::<PositionTexCoord>() * NUM_VERTS) as u64;
         let request_index_buffer_size = (std::mem::size_of::<u32>() * NUM_INDCIES) as u64;
         let (vb_buffer_start_offset, ib_buffer_start_offset) = self.request_buffer_immediate(device, request_vertex_buffer_size, request_index_buffer_size);
-        let is_new_group = self.evaluate_draw_group(UIDrawGroup::Texture(TextureDrawGroup {
+        let _is_new_group = self.evaluate_draw_group(UIDrawGroup::Texture(TextureDrawGroup {
             vertex_buffer: self.immediate_vertex_buffer.as_ref().unwrap().clone(),
             index_buffer: self.immediate_index_buffer.as_ref().unwrap().clone(),
             vertex_offset_start: vb_buffer_start_offset,
@@ -385,22 +385,27 @@ impl UserInterface {
         }));
         let UIDrawGroup::Texture(ref mut current_group) = self.draw_groups.last_mut().unwrap();
 
+        let c: [u8; 4] = bytemuck::cast(tint_color); 
         let vertex_data: &[PositionTexCoord; NUM_VERTS] = &[
             PositionTexCoord {
                 pos: [pos.min[0], pos.min[1]],
                 uv: uv.min,
+                color: bytemuck::cast([c[3], c[2], c[1], c[0]]) 
             },
             PositionTexCoord {
                 pos: [pos.max[0], pos.min[1]],
                 uv: [uv.max[0], uv.min[1]], 
+                color: bytemuck::cast([c[3], c[2], c[1], c[0]]) 
             },
             PositionTexCoord {
                 pos: [pos.max[0],pos.max[1]],
                 uv: uv.max,
+                color: bytemuck::cast([c[3], c[2], c[1], c[0]]) 
             },
             PositionTexCoord {
                 pos: [pos.min[0], pos.max[1]],
                 uv: [uv.min[0], uv.max[1]],   
+                color: bytemuck::cast([c[3], c[2], c[1], c[0]]) 
             }
         ];
        
@@ -411,9 +416,6 @@ impl UserInterface {
         ];
         current_group.index_count += 6;
         current_group.cursor_index += 4;
-       // if !is_new_group {
-       //      current_group.texture_rects.push(pos.clone());
-       // }
         
         //self.immediate_vertex_buffer.as_ref().unwrap().slice(current_group.vertex_offset_end..(current_group.vertex_offset_end + request_vertex_buffer_size + 1)).get_mapped_range_mut().copy_from_slice(bytemuck::cast_slice(vertex_data));
         //queue.write_buffer(&self.immediate_vertex_buffer.as_ref().unwrap(), current_group.vertex_offset_end, bytemuck::cast_slice(vertex_data));
@@ -523,9 +525,9 @@ impl UserInterface {
                 entry_point: "vs_main",
                 buffers: &[
                     wgpu::VertexBufferLayout {
-                        array_stride: 16,
+                        array_stride: 20,
                         step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2],
+                        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Unorm8x4],
                     },
                 ]
             },
