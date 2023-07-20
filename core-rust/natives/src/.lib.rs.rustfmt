@@ -14,6 +14,7 @@ mod context;
 
 
 #[no_mangle]
+#[allow(non_snake_case)]
 pub extern "system" fn Java_org_terasology_engine_rust_TeraRusty_dispatch(_jni: JNIEnv, _class: JClass)  {
     let context = CONTEXT.read().unwrap(); 
 
@@ -148,6 +149,7 @@ async fn initialize(instance: wgpu::Instance, surface: wgpu::Surface) {
 }
 
 #[no_mangle]
+#[allow(non_snake_case)]
 pub extern "system" fn Java_org_terasology_engine_rust_TeraRusty_initializeWindowX11(_jni: JNIEnv, _class: JClass, display_ptr: jlong, window_ptr: jlong)  {
     let mut win = XWindow {
         window: XlibWindowHandle::empty(),
@@ -191,6 +193,7 @@ unsafe impl HasRawDisplayHandle for Win32Window {
 }
 
 #[no_mangle]
+#[allow(non_snake_case)]
 pub extern "system" fn Java_org_terasology_engine_rust_TeraRusty_initializeWindowWin32(_jni: JNIEnv, _class: JClass, window_ptr: jlong)  {
     let mut win = Win32Window {
         window: Win32WindowHandle::empty(),
@@ -226,6 +229,7 @@ pub extern "system" fn Java_org_terasology_engine_rust_TeraRusty_initializeWindo
 //
 //
 //#[no_mangle]
+#[allow(non_snake_case)]
 //pub extern "system" fn Java_org_terasology_engine_native_InitializeWindowX11(_jni: JNIEnv, _class: JClass, display_ptr: jlong, window_ptr: jlong) {
 //    let mut win = XWindow {
 //        window: XlibWindowHandle::empty(),
