@@ -19,8 +19,12 @@ ext {
         natives = [
                 [target: "x86_64-unknown-linux-gnu", module: "linux-amd64"]
         ]
+    } else if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+        natives = [
+                [target: "x86_64-pc-windows-msvc", "module": "windows-amd64"]
+        ]
     } else {
-        throw new GradleException("This script only works on Linux or Mac")
+        throw new GradleException("Unsupported platform")
     }
 
     baseDir = "$rootDir/core-rust"
@@ -66,7 +70,9 @@ natives.each { module ->
             copy {
                 from "$baseDir/natives/target/${module["target"]}/debug"
                 include '*.so'
+                include '*.dll'
                 rename '(.+).so', "\$1-${module["module"]}.so"
+                rename '(.+).dll', "lib\$1-${module["module"]}.dll"
                 into "$baseDir/build/natives"
             }
         }
