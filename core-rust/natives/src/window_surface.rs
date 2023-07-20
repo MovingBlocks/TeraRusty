@@ -29,7 +29,7 @@ impl WindowSurface {
     pub async fn new(instance: &wgpu::Instance, surface: wgpu::Surface ) -> WindowSurface {
         let adapter = instance 
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
+                power_preference: wgpu::PowerPreference::HighPerformance,
                 force_fallback_adapter: false,
                 // Request an adapter which can render to our surface
                 compatible_surface: Some(&surface),
