@@ -1,4 +1,4 @@
-use core::ffi::c_void;
+use core::ffi::{c_void, c_ulong};
 
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle, RawDisplayHandle, RawWindowHandle, Win32WindowHandle, WindowsDisplayHandle, XlibDisplayHandle, XlibWindowHandle};
 
@@ -106,7 +106,7 @@ impl WindowSurface {
             }
         }
 
-        window.window.window = window_ptr as u64;
+        window.window.window = window_ptr as c_ulong;
         window.display.display = display_ptr as *mut c_void;
         
         let surface_result = unsafe {instance.create_surface(&window) };
