@@ -1,16 +1,11 @@
-use crate::engine_kernel::{EngineKernel, WeakEngineRef};
-use crate::java_util::{arc_dispose_handle, arc_from_handle, arc_to_handle, JavaHandle};
-use jni::sys::{jlong};
-use smallvec::smallvec;
-use wgpu::TextureViewDescriptor;
-use std::{borrow::Cow, f32::consts, mem};
+
+pub(crate) use crate::java_util::{arc_dispose_handle, arc_from_handle, arc_to_handle, JavaHandle};
+use jni::sys::jlong;
+use std::{borrow::Cow, mem};
 use std::cell::RefCell;
 use std::sync::Arc;
 use bytemuck::{Pod, Zeroable};
-use wgpu::util::{align_to, DeviceExt, StagingBelt};
 use std::rc::Rc;
-use std::num::{NonZeroU32, NonZeroU64};
-use std::convert::AsMut;
 use std::default::Default;
 
 use crate::resource::texture_resource::TextureResource;
@@ -82,7 +77,7 @@ impl Rect {
 }
 
 #[derive(Clone)]
-struct TextureDrawGroup {
+pub struct TextureDrawGroup {
     cursor_index: u32,
     index_count: u32,
     texture_index: usize,

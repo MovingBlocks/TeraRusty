@@ -150,9 +150,7 @@ impl WindowSurface {
 
         WindowSurface::new(instance, surface).await
     }
-
-
-
+    
     pub fn resize_surface(&mut self, width: i32, height: i32) {
         self.surface_configuration = wgpu::SurfaceConfiguration {
             width: width as u32,

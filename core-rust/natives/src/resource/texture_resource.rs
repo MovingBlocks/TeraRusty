@@ -61,7 +61,6 @@ impl TextureResource {
         buffer: JByteBuffer<'local>)  {
         let kernel_arc = EngineKernel::from_handle(kernel_ptr).expect("kernel invalid");
         let texture_arc = TextureResource::from_handle(texture_ptr).expect("texture invalid"); 
-        let mut kernel = kernel_arc.borrow_mut();
         let buf_size = env
             .get_direct_buffer_capacity(&buffer)
             .expect("Unable to get address to direct buffer. Buffer must be allocated direct.");
@@ -69,7 +68,9 @@ impl TextureResource {
             .get_direct_buffer_address(&buffer)
             .expect("Unable to get address to direct buffer. Buffer must be allocated direct.");
         let slice = unsafe {std::slice::from_raw_parts(buf, buf_size)};
-        let window = kernel.surface.as_mut().unwrap();
+        let window_read = kernel_arc.surface.read().unwrap();
+        let window = window_read.as_ref().unwrap();
+        
         let format = texture_arc.texture.format().bit_size_block() / 8;
         window.queue.write_texture(
             texture_arc.texture.as_image_copy(),
@@ -92,9 +93,9 @@ impl TextureResource {
         kernel_ptr: jlong,
         desc: JObject<'local>,
     )  -> jlong {
-        let kernel_arc = EngineKernel::from_handle(kernel_ptr).expect("kernel invalid");
-        let mut kernel = kernel_arc.borrow_mut();
-        let window = kernel.surface.as_mut().unwrap();
+        let kernel = EngineKernel::from_handle(kernel_ptr).expect("kernel invalid");
+        let window_read = kernel.surface.read().unwrap();
+        let window = window_read.as_ref().unwrap();
         let texture_desc = wgpu_texture_desc(env, &desc); 
         
         let texture = window.device.create_texture(
@@ -115,8 +116,8 @@ impl TextureResource {
         desc: JObject<'local>,
         buffer: JByteBuffer<'local>
     ) -> jlong {
-        let arc = EngineKernel::from_handle(kernel_ptr).expect("kernel invalid");
-        let kernel = arc.borrow();
+        let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
+        //let kernel = kernel_arc.borrow();
         let buf_size = env
             .get_direct_buffer_capacity(&buffer)
             .expect("Unable to get address to direct buffer. Buffer must be allocated direct.");
@@ -124,7 +125,8 @@ impl TextureResource {
             .get_direct_buffer_address(&buffer)
             .expect("Unable to get address to direct buffer. Buffer must be allocated direct.");
         let slice = unsafe {std::slice::from_raw_parts(buf, buf_size)};
-        let window = kernel.surface.as_ref().unwrap();
+        let window_read = kernel_arc.surface.read().unwrap();
+        let window = window_read.as_ref().unwrap();
         let texture_desc = wgpu_texture_desc(env, &desc); 
 
         let texture = window.device.create_texture_with_data(
