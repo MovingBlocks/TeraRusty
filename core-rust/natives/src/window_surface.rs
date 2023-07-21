@@ -1,6 +1,6 @@
 use core::ffi::c_void;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use raw_window_handle::{
     HasRawDisplayHandle, HasRawWindowHandle, RawDisplayHandle, RawWindowHandle, Win32WindowHandle,
     WindowsDisplayHandle, XlibDisplayHandle, XlibWindowHandle,
@@ -32,8 +32,8 @@ fn default_surface_configuration(
 }
 
 impl WindowSurface {
-    pub async fn new(instance: &wgpu::Instance, surface: wgpu::Surface) -> WindowSurface {
-        let adapter = instance
+    pub async fn new(instance: &wgpu::Instance, surface: wgpu::Surface) -> Result<WindowSurface> {
+        let Some(adapter) = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
                 force_fallback_adapter: false,
@@ -41,7 +41,7 @@ impl WindowSurface {
                 compatible_surface: Some(&surface),
             })
             .await
-            .expect("Failed to find an appropriate adapter");
+            else { bail!("Failed to find an appropriate adapter") };
         let adapter_info = adapter.get_info();
         //TODO may be pass it to java's logger?
         println!("Used device info: ");
@@ -74,16 +74,15 @@ impl WindowSurface {
                 },
                 None,
             )
-            .await
-            .expect("Failed to create device");
+            .await?;
         let default_configuration = default_surface_configuration(&surface, &adapter);
-        return WindowSurface {
+        return Ok(WindowSurface {
             surface,
             adapter,
             device,
             queue,
             surface_configuration: default_configuration,
-        };
+        });
     }
 
     pub async fn create_window_x11(
@@ -117,13 +116,13 @@ impl WindowSurface {
         window.display.display = display_ptr as *mut c_void;
 
         let surface = unsafe { instance.create_surface(&window) }?;
-        Ok(WindowSurface::new(instance, surface).await)
+        WindowSurface::new(instance, surface).await
     }
 
     pub async fn create_window_win32(
         instance: &wgpu::Instance,
         window_ptr: *mut c_void,
-    ) -> WindowSurface {
+    ) -> Result<WindowSurface> {
         struct Win32WindowSurface {
             window: Win32WindowHandle,
             display: WindowsDisplayHandle,
@@ -148,12 +147,7 @@ impl WindowSurface {
         window.window.hwnd = window_ptr;
 
         //let mut write_kernel = kernel.write().unwrap();
-        let surface_result = unsafe { instance.create_surface(&window) };
-        let surface = match surface_result {
-            Ok(surface) => surface,
-            Err(err) => panic!("problem creating surface: {:?}", err),
-        };
-
+        let surface = unsafe { instance.create_surface(&window) }?;
         WindowSurface::new(instance, surface).await
     }
 

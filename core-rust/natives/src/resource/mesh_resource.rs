@@ -2,9 +2,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Weak};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use jni::sys::jlong;
 use smallvec::SmallVec;
+use wgpu::Buffer;
 
 use crate::engine_kernel::EngineKernel;
 use crate::java_util::{arc_dispose_handle, arc_to_handle, JavaHandle, try_arc_from_handle};
@@ -44,12 +45,12 @@ impl Semantic {
 }
 
 pub struct ResourceStream {
-    buf: Rc<wgpu::Buffer>,
+    buf: Rc<Buffer>,
     semantic: Semantic,
 }
 
 pub struct IndexStream {
-    buf: Rc<wgpu::Buffer>,
+    buf: Rc<Buffer>,
 }
 
 pub struct GeometryResource {
@@ -60,7 +61,7 @@ pub struct GeometryResource {
 
 impl JavaHandle<Arc<RefCell<GeometryResource>>> for GeometryResource {
     fn from_handle(ptr: jlong) -> Result<Arc<RefCell<GeometryResource>>> {
-        try_arc_from_handle(ptr)
+        try_arc_from_handle(ptr).map_err(|_| anyhow!("Unable to get geometry resource handle by ptr"))
     }
 
     fn to_handle(from: Arc<RefCell<GeometryResource>>) -> jlong {

@@ -1,7 +1,7 @@
 use std::convert::From;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use glam::u32;
 use jni::JNIEnv;
 use jni::objects::{JByteBuffer, JClass, JObject};
@@ -20,19 +20,19 @@ pub struct TextureResource {
 fn wgpu_texture_desc<'local, 'ret>(
     env: &mut JNIEnv,
     obj: &JObject,
-) -> TextureDescriptor<'ret> {
-    let width = env.get_field(obj, "width", "I").unwrap().i().unwrap();
-    let height = env.get_field(obj, "height", "I").unwrap().i().unwrap();
-    let layer = env.get_field(obj, "layers", "I").unwrap().i().unwrap();
-    let texture_dim = env.get_field(obj, "dim", "I").unwrap().i().unwrap();
-    let format = env.get_field(obj, "format", "I").unwrap().i().unwrap();
+) -> Result<TextureDescriptor<'ret>> {
+    let width = env.get_field(obj, "width", "I")?.i()?;
+    let height = env.get_field(obj, "height", "I")?.i()?;
+    let layer = env.get_field(obj, "layers", "I")?.i()?;
+    let texture_dim = env.get_field(obj, "dim", "I")?.i()?;
+    let format = env.get_field(obj, "format", "I")?.i()?;
 
     let texture_format: wgpu::TextureFormat =
         unsafe { std::mem::transmute::<jint, JavaImageFormat>(format) }.into();
     let texture_dim: wgpu::TextureDimension =
         unsafe { std::mem::transmute::<jint, JavaTextureDim>(texture_dim) }.into();
 
-    TextureDescriptor {
+    Ok(TextureDescriptor {
         size: wgpu::Extent3d {
             width: width as u32,
             height: height as u32,
@@ -45,7 +45,7 @@ fn wgpu_texture_desc<'local, 'ret>(
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         label: None,
         view_formats: &[],
-    }
+    })
 }
 
 impl TextureResource {
@@ -81,7 +81,7 @@ impl TextureResource {
                 .get_direct_buffer_address(&buffer)
                 else { bail!("Unable to get address to direct buffer. Buffer must be allocated direct.") };
             let slice = unsafe { std::slice::from_raw_parts(buf, buf_size) };
-            let window = kernel.surface.as_mut().unwrap();
+            let Some(window) = kernel.surface.as_mut() else { bail!("Unable to get window") };
             let format = texture_arc.texture.format().bit_size_block() / 8;
             window.queue.write_texture(
                 texture_arc.texture.as_image_copy(),
@@ -112,7 +112,7 @@ impl TextureResource {
             let mut kernel = kernel_arc.borrow_mut();
             let Some(window) = kernel.surface.as_mut()
                 else { bail!("surface don't exists") };
-            let texture_desc = wgpu_texture_desc(env, &desc);
+            let texture_desc = wgpu_texture_desc(env, &desc)?;
 
             let texture = window
                 .device
@@ -141,7 +141,7 @@ impl TextureResource {
                 .get_direct_buffer_address(&buffer)?;
             let slice = unsafe { std::slice::from_raw_parts(buf, buf_size) };
             let Some(window) = kernel.surface.as_ref() else { bail!("surface not setted") };
-            let texture_desc = wgpu_texture_desc(env, &desc);
+            let texture_desc = wgpu_texture_desc(env, &desc)?;
 
             let texture = window.device.create_texture_with_data(
                 &window.queue,
@@ -165,15 +165,14 @@ impl TextureResource {
             let size = texture_arc.texture.size();
             // joml_vec2::<f32>(vec2_obj)
             //     .set(&mut env, size.width as f32, size.height as f32);
-            set_joml_vector2f(env, &mut vec2_obj, size.width as f32, size.height as f32);
-            Ok(())
+            set_joml_vector2f(env, &mut vec2_obj, size.width as f32, size.height as f32)
         })
     }
 }
 
 impl JavaHandle<Arc<TextureResource>> for TextureResource {
     fn from_handle(ptr: jlong) -> Result<Arc<TextureResource>> {
-        try_arc_from_handle(ptr)
+        try_arc_from_handle(ptr).map_err(|_| anyhow!("Unable to get texture resource handle by ptr"))
     }
 
     fn to_handle(from: Arc<TextureResource>) -> jlong {

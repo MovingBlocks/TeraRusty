@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use jni::{
     objects::{JObject, JValue},
     sys::jlong,
@@ -55,11 +55,12 @@ pub trait JavaHandleContainer<T> {
 //    }
 //}
 //
-pub fn set_joml_vector2f(env: &mut JNIEnv, o: &mut JObject, x: f32, y: f32) {
+pub fn set_joml_vector2f(env: &mut JNIEnv, o: &mut JObject, x: f32, y: f32) -> Result<()> {
     env.set_field(&o, "x", "F", JValue::Float(x))
-        .expect("failed to set x");
+        .map_err(|e| anyhow!("failed to set x: {}", e))?;
     env.set_field(&o, "y", "F", JValue::Float(y))
-        .expect("failed to set y");
+        .map_err(|e| anyhow!("failed to set y: {}", e))?;
+    Ok(())
 }
 //
 // pub fn set_joml_vector3f(mut env: JNIEnv, o: &mut JObject, x: f32, y: f32, z: f32) {
@@ -82,6 +83,7 @@ pub fn set_joml_vector2f(env: &mut JNIEnv, o: &mut JObject, x: f32, y: f32) {
 //         .expect("failed to set w");
 // }
 
+#[deprecated(note = "use try_arc_from_handle")]
 pub fn arc_from_handle<T>(ptr: jlong) -> Option<Arc<T>> {
     if ptr == 0 {
         panic!("invalid handle");

@@ -8,7 +8,7 @@ pub fn try_throw<T>(env: &mut JNIEnv, block: impl FnOnce(&mut JNIEnv) -> anyhow:
     where T: Default {
     block(env)
         .unwrap_or_else(|err: Error| {
-            env.throw(format!("{}\nNative Error backtrace: {}",err,err.backtrace()))
+            env.throw(format!("{:?}", err))
                 .expect("Cannot throw exception to Java, Sorry T_T");
             T::default() // Don't matter, because we throw an exception
         })

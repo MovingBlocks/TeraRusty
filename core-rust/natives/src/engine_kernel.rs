@@ -2,7 +2,7 @@ use core::ffi::c_void;
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use futures::executor::block_on;
 use jni::{
     JNIEnv,
@@ -11,9 +11,15 @@ use jni::{
 };
 use wgpu::CommandEncoder;
 
-use jni_support::try_throw;
-
-use crate::{java_util::{arc_dispose_handle, arc_to_handle, JavaHandle, try_arc_from_handle}, jni_support, resource::texture_resource::TextureResource, ui::{Rect, UserInterface}, window_surface::WindowSurface};
+use crate::java_util::arc_dispose_handle;
+use crate::java_util::arc_to_handle;
+use crate::java_util::JavaHandle;
+use crate::java_util::try_arc_from_handle;
+use crate::jni_support::try_throw;
+use crate::resource::texture_resource::TextureResource;
+use crate::ui::Rect;
+use crate::ui::UserInterface;
+use crate::window_surface::WindowSurface;
 
 pub struct EngineKernel {
     pub instance: wgpu::Instance,
@@ -24,8 +30,8 @@ pub struct EngineKernel {
 }
 
 impl EngineKernel {
-    pub fn cmd_prepare(&mut self) {
-        let Some(ref mut window) = self.surface else { panic!("window is not prepared"); };
+    pub fn cmd_prepare(&mut self) -> Result<()> {
+        let Some(ref mut window) = self.surface else { bail!("window is not prepared"); };
 
         if let Some(ui) = self.user_interface.as_mut() {
             ui.cmd_prepare();
@@ -35,22 +41,23 @@ impl EngineKernel {
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }),
         ));
+        Ok(())
     }
 
-    pub fn cmd_dispatch(&mut self) {
-        let Some(ref mut window) = self.surface else { return; };
+    pub fn cmd_dispatch(&mut self) -> Result<()> {
+        let Some(ref mut window) = self.surface else { return Ok(()); };
         let frame = window
             .surface
-            .get_current_texture()
-            .expect("Failed to acquire next swap chain texture");
-
+            .get_current_texture()?;
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = self.encoder.replace(None).unwrap();
+        let Some(mut encoder) = self.encoder.replace(None)
+            else { bail!("encoder is not prepared") };
 
-        let ui = self.user_interface.as_mut().unwrap();
+        let Some(ui) = self.user_interface.as_mut()
+            else { bail!("user interface is not prepared") };
         let frame_texture = &frame.texture;
         let size = frame_texture.size();
 
@@ -67,6 +74,7 @@ impl EngineKernel {
 
         window.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
+        Ok(())
     }
 
     #[no_mangle]
@@ -101,7 +109,7 @@ impl EngineKernel {
         width: jint,
         height: jint,
     ) {
-        try_throw(&mut jni, |env| {
+        try_throw(&mut jni, |_| {
             let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
             let mut kernel = kernel_arc.try_borrow_mut()?;
             fn resolve_helper(
@@ -127,11 +135,10 @@ impl EngineKernel {
         _class: JClass,
         kernel_ptr: jlong,
     ) {
-        try_throw(&mut jni, |jni| {
+        try_throw(&mut jni, |_| {
             let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
             let mut kernel = kernel_arc.borrow_mut();
-            kernel.cmd_dispatch();
-            Ok(())
+            kernel.cmd_dispatch()
         })
     }
 
@@ -142,11 +149,10 @@ impl EngineKernel {
         _class: JClass,
         kernel_ptr: jlong,
     ) {
-        try_throw(&mut jni, |jni| {
+        try_throw(&mut jni, |_| {
             let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
             let mut kernel = kernel_arc.borrow_mut();
-            kernel.cmd_prepare();
-            Ok(())
+            kernel.cmd_prepare()
         })
     }
 
@@ -159,7 +165,7 @@ impl EngineKernel {
         display_ptr: jlong,
         window_ptr: jlong,
     ) {
-        try_throw(&mut jni, |jni| {
+        try_throw(&mut jni, |_| {
             let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
             let mut kernel = kernel_arc.try_borrow_mut()?;
             kernel.surface = Some(block_on(WindowSurface::create_window_x11(
@@ -167,8 +173,7 @@ impl EngineKernel {
                 display_ptr as *mut c_void,
                 window_ptr as *mut c_void,
             ))?);
-            kernel.initialize_subsystems();
-            Ok(())
+            kernel.initialize_subsystems()
         })
     }
 
@@ -181,24 +186,25 @@ impl EngineKernel {
         _display_ptr: jlong,
         window_ptr: jlong,
     ) {
-        try_throw(&mut jni, |jni| {
+        try_throw(&mut jni, |_| {
             let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
             let mut kernel = kernel_arc.borrow_mut();
             kernel.surface = Some(block_on(WindowSurface::create_window_win32(
                 &kernel.instance,
                 window_ptr as *mut c_void,
-            )));
-            kernel.initialize_subsystems();
-            Ok(())
+            ))?);
+            kernel.initialize_subsystems()
         })
     }
 
-    fn initialize_subsystems(&mut self) {
-        let ref mut window = &self.surface.as_ref().unwrap();
+    fn initialize_subsystems(&mut self) -> Result<()> {
+        let Some(ref window) = &self.surface.as_ref()
+            else { bail!("Surface is not prepared") };
         self.user_interface = Some(UserInterface::new(
             &window.device,
             &window.surface_configuration,
         ));
+        Ok(())
     }
 
     // User Interface
@@ -213,7 +219,7 @@ impl EngineKernel {
         max_x: jfloat,
         max_y: jfloat,
     ) {
-        try_throw(&mut jni, |jni| {
+        try_throw(&mut jni, |_| {
             let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
             let mut kernel = kernel_arc.borrow_mut();
             let Some(ui) = kernel.user_interface.as_mut() else { bail!("surface invalid"); };
@@ -233,7 +239,7 @@ impl EngineKernel {
         _class: JClass,
         kernel_ptr: jlong,
     ) {
-        try_throw(&mut jni, |jni| {
+        try_throw(&mut jni, |_| {
             let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
             let mut kernel = kernel_arc.borrow_mut();
             let Some(ui) = kernel.user_interface.as_mut() else { bail!("surface invalid"); };
@@ -259,24 +265,24 @@ impl EngineKernel {
         pos_max_y: jfloat,
         tint_color: jint,
     ) {
-        try_throw(&mut jni, |jni| {
+        try_throw(&mut jni, |_| {
             let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
             let text_resource_arc = TextureResource::from_handle(tex_ptr)?;
             let mut kernel = kernel_arc.borrow_mut();
             fn resolve_ui_window(
                 kernel: &mut EngineKernel,
-            ) -> (
+            ) -> Result<(
                 &mut RefCell<Option<CommandEncoder>>,
                 &mut WindowSurface,
                 &mut UserInterface,
-            ) {
-                return (
+            )> {
+                return Ok((
                     &mut kernel.encoder,
-                    kernel.surface.as_mut().unwrap(),
-                    kernel.user_interface.as_mut().unwrap(),
-                );
+                    kernel.surface.as_mut().ok_or(anyhow!("surface is not prepared"))?,
+                    kernel.user_interface.as_mut().ok_or(anyhow!("user interface is not prepared"))?
+                ));
             }
-            let (_encoder, window, ui) = resolve_ui_window(&mut kernel);
+            let (_encoder, window, ui) = resolve_ui_window(&mut kernel)?;
 
             ui.cmd_draw_texture(
                 &window.queue,
@@ -299,7 +305,7 @@ impl EngineKernel {
 
 impl JavaHandle<Arc<RefCell<EngineKernel>>> for EngineKernel {
     fn from_handle(ptr: jlong) -> Result<Arc<RefCell<EngineKernel>>> {
-        try_arc_from_handle(ptr)
+        try_arc_from_handle(ptr).map_err(|_| anyhow!("Unable to get Engine Kernel handle by ptr"))
     }
 
     fn to_handle(from: Arc<RefCell<EngineKernel>>) -> jlong {

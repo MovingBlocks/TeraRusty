@@ -5,7 +5,7 @@ use std::mem::size_of;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bytemuck::{cast as bytecast, Pod, Zeroable};
 use glam::IVec2;
 use jni::sys::jlong;
@@ -163,7 +163,7 @@ impl Drop for UserInterface {
 
 impl JavaHandle<Arc<RefCell<UserInterface>>> for UserInterface {
     fn from_handle(ptr: jlong) -> Result<Arc<RefCell<UserInterface>>> {
-        try_arc_from_handle(ptr)
+        try_arc_from_handle(ptr).map_err(|_| anyhow!("Unable to get user interface handle by ptr"))
     }
 
     fn to_handle(from: Arc<RefCell<UserInterface>>) -> jlong {
