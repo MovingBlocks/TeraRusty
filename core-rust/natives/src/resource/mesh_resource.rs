@@ -2,11 +2,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Weak};
 
+use anyhow::Result;
 use jni::sys::jlong;
 use smallvec::SmallVec;
 
 use crate::engine_kernel::EngineKernel;
-use crate::java_util::{arc_dispose_handle, arc_from_handle, arc_to_handle, JavaHandle};
+use crate::java_util::{arc_dispose_handle, arc_to_handle, JavaHandle, try_arc_from_handle};
 
 //pub struct ResourceManager {
 //    geometry: SlotMap<DefaultKey, GeometryHandle>
@@ -58,8 +59,8 @@ pub struct GeometryResource {
 }
 
 impl JavaHandle<Arc<RefCell<GeometryResource>>> for GeometryResource {
-    fn from_handle(ptr: jlong) -> Option<Arc<RefCell<GeometryResource>>> {
-        arc_from_handle(ptr)
+    fn from_handle(ptr: jlong) -> Result<Arc<RefCell<GeometryResource>>> {
+        try_arc_from_handle(ptr)
     }
 
     fn to_handle(from: Arc<RefCell<GeometryResource>>) -> jlong {

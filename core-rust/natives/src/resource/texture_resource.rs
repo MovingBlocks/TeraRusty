@@ -1,25 +1,26 @@
 use std::convert::From;
 use std::sync::Arc;
 
+use anyhow::{bail, Result};
 use glam::u32;
 use jni::JNIEnv;
 use jni::objects::{JByteBuffer, JClass, JObject};
 use jni::sys::{jint, jlong};
+use wgpu::TextureDescriptor;
 use wgpu::util::DeviceExt;
 
 use crate::engine_kernel::EngineKernel;
-use crate::java_util::{
-    arc_dispose_handle, arc_from_handle, arc_to_handle, JavaHandle, set_joml_vector2f,
-};
+use crate::java_util::{arc_dispose_handle, arc_to_handle, JavaHandle, set_joml_vector2f, try_arc_from_handle};
+use crate::jni_support::try_throw;
 
 pub struct TextureResource {
     pub texture: wgpu::Texture,
 }
 
 fn wgpu_texture_desc<'local, 'ret>(
-    mut env: JNIEnv,
+    env: &mut JNIEnv,
     obj: &JObject,
-) -> wgpu::TextureDescriptor<'ret> {
+) -> TextureDescriptor<'ret> {
     let width = env.get_field(obj, "width", "I").unwrap().i().unwrap();
     let height = env.get_field(obj, "height", "I").unwrap().i().unwrap();
     let layer = env.get_field(obj, "layers", "I").unwrap().i().unwrap();
@@ -31,7 +32,7 @@ fn wgpu_texture_desc<'local, 'ret>(
     let texture_dim: wgpu::TextureDimension =
         unsafe { std::mem::transmute::<jint, JavaTextureDim>(texture_dim) }.into();
 
-    wgpu::TextureDescriptor {
+    TextureDescriptor {
         size: wgpu::Extent3d {
             width: width as u32,
             height: height as u32,
@@ -63,34 +64,37 @@ impl TextureResource {
     pub extern "system" fn Java_org_terasology_engine_rust_TeraTexture_00024JNI_writeTextureBuffer<
         'local,
     >(
-        env: JNIEnv<'local>,
+        mut env: JNIEnv<'local>,
         _class: JClass,
         kernel_ptr: jlong,
         texture_ptr: jlong,
         buffer: JByteBuffer<'local>,
     ) {
-        let kernel_arc = EngineKernel::from_handle(kernel_ptr).expect("kernel invalid");
-        let texture_arc = TextureResource::from_handle(texture_ptr).expect("texture invalid");
-        let mut kernel = kernel_arc.borrow_mut();
-        let buf_size = env
-            .get_direct_buffer_capacity(&buffer)
-            .expect("Unable to get address to direct buffer. Buffer must be allocated direct.");
-        let buf: _ = env
-            .get_direct_buffer_address(&buffer)
-            .expect("Unable to get address to direct buffer. Buffer must be allocated direct.");
-        let slice = unsafe { std::slice::from_raw_parts(buf, buf_size) };
-        let window = kernel.surface.as_mut().unwrap();
-        let format = texture_arc.texture.format().bit_size_block() / 8;
-        window.queue.write_texture(
-            texture_arc.texture.as_image_copy(),
-            &slice,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(format),
-                rows_per_image: None,
-            },
-            wgpu::Extent3d::default(),
-        );
+        try_throw(&mut env, |env| {
+            let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
+            let texture_arc = TextureResource::from_handle(texture_ptr)?;
+            let mut kernel = kernel_arc.borrow_mut();
+            let Ok(buf_size) = env
+                .get_direct_buffer_capacity(&buffer)
+                else { bail!("Unable to get address to direct buffer. Buffer must be allocated direct.") };
+            let Ok(buf) = env
+                .get_direct_buffer_address(&buffer)
+                else { bail!("Unable to get address to direct buffer. Buffer must be allocated direct.") };
+            let slice = unsafe { std::slice::from_raw_parts(buf, buf_size) };
+            let window = kernel.surface.as_mut().unwrap();
+            let format = texture_arc.texture.format().bit_size_block() / 8;
+            window.queue.write_texture(
+                texture_arc.texture.as_image_copy(),
+                &slice,
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(format),
+                    rows_per_image: None,
+                },
+                wgpu::Extent3d::default(),
+            );
+            Ok(())
+        })
     }
 
     #[no_mangle]
@@ -98,20 +102,23 @@ impl TextureResource {
     pub extern "system" fn Java_org_terasology_engine_rust_TeraTexture_00024JNI_createTextureResource<
         'local,
     >(
-        env: JNIEnv<'local>,
+        mut env: JNIEnv<'local>,
         _class: JClass,
         kernel_ptr: jlong,
         desc: JObject<'local>,
     ) -> jlong {
-        let kernel_arc = EngineKernel::from_handle(kernel_ptr).expect("kernel invalid");
-        let mut kernel = kernel_arc.borrow_mut();
-        let window = kernel.surface.as_mut().unwrap();
-        let texture_desc = wgpu_texture_desc(env, &desc);
+        try_throw(&mut env, |env| {
+            let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
+            let mut kernel = kernel_arc.borrow_mut();
+            let Some(window) = kernel.surface.as_mut()
+                else { bail!("surface don't exists") };
+            let texture_desc = wgpu_texture_desc(env, &desc);
 
-        let texture = window
-            .device
-            .create_texture(&wgpu::TextureDescriptor { ..texture_desc });
-        TextureResource::to_handle(Arc::new(TextureResource { texture }))
+            let texture = window
+                .device
+                .create_texture(&TextureDescriptor { ..texture_desc });
+            Ok(TextureResource::to_handle(Arc::new(TextureResource { texture })))
+        })
     }
 
     #[no_mangle]
@@ -119,30 +126,30 @@ impl TextureResource {
     pub extern "system" fn Java_org_terasology_engine_rust_TeraTexture_00024JNI_createTextureResourceFromBuffer<
         'local,
     >(
-        env: JNIEnv<'local>,
+        mut env: JNIEnv<'local>,
         _class: JClass,
         kernel_ptr: jlong,
         desc: JObject<'local>,
         buffer: JByteBuffer<'local>,
     ) -> jlong {
-        let arc = EngineKernel::from_handle(kernel_ptr).expect("kernel invalid");
-        let kernel = arc.borrow();
-        let buf_size = env
-            .get_direct_buffer_capacity(&buffer)
-            .expect("Unable to get address to direct buffer. Buffer must be allocated direct.");
-        let buf: _ = env
-            .get_direct_buffer_address(&buffer)
-            .expect("Unable to get address to direct buffer. Buffer must be allocated direct.");
-        let slice = unsafe { std::slice::from_raw_parts(buf, buf_size) };
-        let window = kernel.surface.as_ref().unwrap();
-        let texture_desc = wgpu_texture_desc(env, &desc);
+        try_throw(&mut env, |env| {
+            let arc = EngineKernel::from_handle(kernel_ptr)?;
+            let kernel = arc.borrow();
+            let buf_size = env
+                .get_direct_buffer_capacity(&buffer)?;
+            let buf: _ = env
+                .get_direct_buffer_address(&buffer)?;
+            let slice = unsafe { std::slice::from_raw_parts(buf, buf_size) };
+            let Some(window) = kernel.surface.as_ref() else { bail!("surface not setted") };
+            let texture_desc = wgpu_texture_desc(env, &desc);
 
-        let texture = window.device.create_texture_with_data(
-            &window.queue,
-            &wgpu::TextureDescriptor { ..texture_desc },
-            slice,
-        );
-        TextureResource::to_handle(Arc::new(TextureResource { texture }))
+            let texture = window.device.create_texture_with_data(
+                &window.queue,
+                &TextureDescriptor { ..texture_desc },
+                slice,
+            );
+            Ok(TextureResource::to_handle(Arc::new(TextureResource { texture })))
+        })
     }
 
     #[no_mangle]
@@ -153,17 +160,20 @@ impl TextureResource {
         texture_ptr: jlong,
         mut vec2_obj: JObject<'local>,
     ) {
-        let texture_arc = TextureResource::from_handle(texture_ptr).expect("texture invalid");
-        let size = texture_arc.texture.size();
-        // joml_vec2::<f32>(vec2_obj)
-        //     .set(&mut env, size.width as f32, size.height as f32);
-        set_joml_vector2f(env, &mut vec2_obj, size.width as f32, size.height as f32);
+        try_throw(&mut env, |env| {
+            let texture_arc = TextureResource::from_handle(texture_ptr)?;
+            let size = texture_arc.texture.size();
+            // joml_vec2::<f32>(vec2_obj)
+            //     .set(&mut env, size.width as f32, size.height as f32);
+            set_joml_vector2f(env, &mut vec2_obj, size.width as f32, size.height as f32);
+            Ok(())
+        })
     }
 }
 
 impl JavaHandle<Arc<TextureResource>> for TextureResource {
-    fn from_handle(ptr: jlong) -> Option<Arc<TextureResource>> {
-        arc_from_handle(ptr)
+    fn from_handle(ptr: jlong) -> Result<Arc<TextureResource>> {
+        try_arc_from_handle(ptr)
     }
 
     fn to_handle(from: Arc<TextureResource>) -> jlong {

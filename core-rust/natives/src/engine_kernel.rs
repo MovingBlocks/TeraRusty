@@ -2,19 +2,18 @@ use core::ffi::c_void;
 use std::cell::RefCell;
 use std::sync::Arc;
 
+use anyhow::{bail, Result};
 use futures::executor::block_on;
 use jni::{
+    JNIEnv,
     objects::JClass,
-    sys::{jfloat, jint, jlong, JNIEnv},
+    sys::{jfloat, jint, jlong},
 };
 use wgpu::CommandEncoder;
 
-use crate::{
-    java_util::{arc_dispose_handle, arc_from_handle, arc_to_handle, JavaHandle},
-    resource::texture_resource::TextureResource,
-    ui::{Rect, UserInterface},
-    window_surface::WindowSurface,
-};
+use jni_support::try_throw;
+
+use crate::{java_util::{arc_dispose_handle, arc_to_handle, JavaHandle, try_arc_from_handle}, jni_support, resource::texture_resource::TextureResource, ui::{Rect, UserInterface}, window_surface::WindowSurface};
 
 pub struct EngineKernel {
     pub instance: wgpu::Instance,
@@ -88,7 +87,7 @@ impl EngineKernel {
     ) -> jlong {
         EngineKernel::to_handle(Arc::new(RefCell::new(EngineKernel {
             instance: wgpu::Instance::default(),
-            surface: None::<WindowSurface>,
+            surface: None,
             user_interface: None,
             encoder: RefCell::new(None),
         })))
@@ -96,88 +95,102 @@ impl EngineKernel {
     #[no_mangle]
     #[allow(non_snake_case)]
     pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_resizeSurface(
-        _jni: JNIEnv,
+        mut jni: JNIEnv,
         _class: JClass,
         kernel_ptr: jlong,
         width: jint,
         height: jint,
     ) {
-        let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
-        let mut kernel = kernel_arc.borrow_mut();
-        fn resolve_helper(
-            kernel: &mut EngineKernel,
-        ) -> (&mut Option<WindowSurface>, &mut Option<UserInterface>) {
-            return (&mut kernel.surface, &mut kernel.user_interface);
-        }
-        let (surface, ui) = resolve_helper(&mut kernel);
+        try_throw(&mut jni, |env| {
+            let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
+            let mut kernel = kernel_arc.try_borrow_mut()?;
+            fn resolve_helper(
+                kernel: &mut EngineKernel,
+            ) -> (&mut Option<WindowSurface>, &mut Option<UserInterface>) {
+                return (&mut kernel.surface, &mut kernel.user_interface);
+            }
+            let (surface, ui) = resolve_helper(&mut kernel);
 
-        let Some(surface) = surface.as_mut() else { panic!("surface not initialized"); };
-        surface.resize_surface(width, height);
+            let Some(surface) = surface.as_mut() else { bail!("surface not initialized"); };
+            surface.resize_surface(width, height);
 
-        if let Some(ui) = ui.as_mut() {
-            ui.resize_surface(&surface.device, &glam::IVec2::new(width, height));
-        }
+            Ok(if let Some(ui) = ui.as_mut() {
+                ui.resize_surface(&surface.device, &glam::IVec2::new(width, height))
+            })
+        })
     }
 
     #[no_mangle]
     #[allow(non_snake_case)]
     pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_cmdDispatch(
-        _jni: JNIEnv,
+        mut jni: JNIEnv,
         _class: JClass,
         kernel_ptr: jlong,
     ) {
-        let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
-        let mut kernel = kernel_arc.borrow_mut();
-        kernel.cmd_dispatch();
+        try_throw(&mut jni, |jni| {
+            let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
+            let mut kernel = kernel_arc.borrow_mut();
+            kernel.cmd_dispatch();
+            Ok(())
+        })
     }
 
     #[no_mangle]
     #[allow(non_snake_case)]
     pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_cmdPrepare(
-        _jni: JNIEnv,
+        mut jni: JNIEnv,
         _class: JClass,
         kernel_ptr: jlong,
     ) {
-        let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
-        let mut kernel = kernel_arc.borrow_mut();
-        kernel.cmd_prepare();
+        try_throw(&mut jni, |jni| {
+            let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
+            let mut kernel = kernel_arc.borrow_mut();
+            kernel.cmd_prepare();
+            Ok(())
+        })
     }
 
     #[no_mangle]
     #[allow(non_snake_case)]
     pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_initSurfaceX11(
-        _jni: JNIEnv,
+        mut jni: JNIEnv,
         _class: JClass,
         kernel_ptr: jlong,
         display_ptr: jlong,
         window_ptr: jlong,
     ) {
-        let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
-        let mut kernel = kernel_arc.borrow_mut();
-        kernel.surface = Some(block_on(WindowSurface::create_window_x11(
-            &kernel.instance,
-            display_ptr as *mut c_void,
-            window_ptr as *mut c_void,
-        )));
-        kernel.initialize_subsystems();
+        try_throw(&mut jni, |jni| {
+            let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
+            let mut kernel = kernel_arc.try_borrow_mut()?;
+            kernel.surface = Some(block_on(WindowSurface::create_window_x11(
+                &kernel.instance,
+                display_ptr as *mut c_void,
+                window_ptr as *mut c_void,
+            ))?);
+            kernel.initialize_subsystems();
+            Ok(())
+        })
     }
 
     #[no_mangle]
     #[allow(non_snake_case)]
     pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_initSurfaceWin32(
-        _jni: JNIEnv,
+        mut jni: JNIEnv,
         _class: JClass,
         kernel_ptr: jlong,
         _display_ptr: jlong,
         window_ptr: jlong,
     ) {
-        let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
-        let mut kernel = kernel_arc.borrow_mut();
-        kernel.surface = Some(block_on(WindowSurface::create_window_win32(
-            &kernel.instance,
-            window_ptr as *mut c_void,
-        )));
-        kernel.initialize_subsystems();
+        try_throw(&mut jni, |jni| {
+            let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
+            let mut kernel = kernel_arc.borrow_mut();
+            kernel.surface = Some(block_on(WindowSurface::create_window_win32(
+                &kernel.instance,
+                window_ptr as *mut c_void,
+            )));
+            kernel.initialize_subsystems();
+            Ok(())
+        })
     }
 
     fn initialize_subsystems(&mut self) {
@@ -192,7 +205,7 @@ impl EngineKernel {
     #[no_mangle]
     #[allow(non_snake_case)]
     pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_cmdUISetCrop(
-        _jni: JNIEnv,
+        mut jni: JNIEnv,
         _class: JClass,
         kernel_ptr: jlong,
         min_x: jfloat,
@@ -200,33 +213,39 @@ impl EngineKernel {
         max_x: jfloat,
         max_y: jfloat,
     ) {
-        let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
-        let mut kernel = kernel_arc.borrow_mut();
-        let Some(ui) = kernel.user_interface.as_mut() else { panic!("surface invalid"); };
+        try_throw(&mut jni, |jni| {
+            let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
+            let mut kernel = kernel_arc.borrow_mut();
+            let Some(ui) = kernel.user_interface.as_mut() else { bail!("surface invalid"); };
 
-        ui.cmd_set_crop(Some(Rect {
-            min: [min_x, min_y],
-            max: [max_x, max_y],
-        }));
+            ui.cmd_set_crop(Some(Rect {
+                min: [min_x, min_y],
+                max: [max_x, max_y],
+            }));
+            Ok(())
+        })
     }
 
     #[no_mangle]
     #[allow(non_snake_case)]
     pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_cmdUIClearCrop(
-        _jni: JNIEnv,
+        mut jni: JNIEnv,
         _class: JClass,
         kernel_ptr: jlong,
     ) {
-        let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
-        let mut kernel = kernel_arc.borrow_mut();
-        let Some(ui) = kernel.user_interface.as_mut() else { panic!("surface invalid"); };
-        ui.cmd_set_crop(None);
+        try_throw(&mut jni, |jni| {
+            let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
+            let mut kernel = kernel_arc.borrow_mut();
+            let Some(ui) = kernel.user_interface.as_mut() else { bail!("surface invalid"); };
+            ui.cmd_set_crop(None);
+            Ok(())
+        })
     }
 
     #[no_mangle]
     #[allow(non_snake_case)]
     pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_cmdUIDrawTexture(
-        _jni: JNIEnv,
+        mut jni: JNIEnv,
         _class: JClass,
         kernel_ptr: jlong,
         tex_ptr: jlong,
@@ -240,44 +259,47 @@ impl EngineKernel {
         pos_max_y: jfloat,
         tint_color: jint,
     ) {
-        let Some(kernel_arc) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
-        let Some(text_resource_arc) = TextureResource::from_handle(tex_ptr) else { panic!("invalid tex resource") };
-        let mut kernel = kernel_arc.borrow_mut();
-        fn resolve_ui_window(
-            kernel: &mut EngineKernel,
-        ) -> (
-            &mut RefCell<Option<CommandEncoder>>,
-            &mut WindowSurface,
-            &mut UserInterface,
-        ) {
-            return (
-                &mut kernel.encoder,
-                kernel.surface.as_mut().unwrap(),
-                kernel.user_interface.as_mut().unwrap(),
-            );
-        }
-        let (_encoder, window, ui) = resolve_ui_window(&mut kernel);
+        try_throw(&mut jni, |jni| {
+            let kernel_arc = EngineKernel::from_handle(kernel_ptr)?;
+            let text_resource_arc = TextureResource::from_handle(tex_ptr)?;
+            let mut kernel = kernel_arc.borrow_mut();
+            fn resolve_ui_window(
+                kernel: &mut EngineKernel,
+            ) -> (
+                &mut RefCell<Option<CommandEncoder>>,
+                &mut WindowSurface,
+                &mut UserInterface,
+            ) {
+                return (
+                    &mut kernel.encoder,
+                    kernel.surface.as_mut().unwrap(),
+                    kernel.user_interface.as_mut().unwrap(),
+                );
+            }
+            let (_encoder, window, ui) = resolve_ui_window(&mut kernel);
 
-        ui.cmd_draw_texture(
-            &window.queue,
-            &window.device,
-            &text_resource_arc,
-            &Rect {
-                min: [uv_min_x, uv_min_y],
-                max: [uv_max_x, uv_max_y],
-            },
-            &Rect {
-                min: [pos_min_x, pos_min_y],
-                max: [pos_max_x, pos_max_y],
-            },
-            tint_color as u32,
-        );
+            ui.cmd_draw_texture(
+                &window.queue,
+                &window.device,
+                &text_resource_arc,
+                &Rect {
+                    min: [uv_min_x, uv_min_y],
+                    max: [uv_max_x, uv_max_y],
+                },
+                &Rect {
+                    min: [pos_min_x, pos_min_y],
+                    max: [pos_max_x, pos_max_y],
+                },
+                tint_color as u32,
+            );
+            Ok(())
+        })
     }
 }
 
 impl JavaHandle<Arc<RefCell<EngineKernel>>> for EngineKernel {
-    fn from_handle(ptr: jlong) -> Option<Arc<RefCell<EngineKernel>>> {
-        arc_from_handle(ptr)
+    fn from_handle(ptr: jlong) -> Result<Arc<RefCell<EngineKernel>>> {
+        try_arc_from_handle(ptr)
     }
 
     fn to_handle(from: Arc<RefCell<EngineKernel>>) -> jlong {

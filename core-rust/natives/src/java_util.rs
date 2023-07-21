@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::{bail, Result};
 use jni::{
     objects::{JObject, JValue},
     sys::jlong,
@@ -7,7 +8,7 @@ use jni::{
 use jni::JNIEnv;
 
 pub trait JavaHandle<T> {
-    fn from_handle(ptr: jlong) -> Option<T>;
+    fn from_handle(ptr: jlong) -> Result<T>;
     fn to_handle(from: T) -> jlong;
     fn drop_handle(ptr: jlong);
 }
@@ -54,7 +55,7 @@ pub trait JavaHandleContainer<T> {
 //    }
 //}
 //
-pub fn set_joml_vector2f(mut env: JNIEnv, o: &mut JObject, x: f32, y: f32) {
+pub fn set_joml_vector2f(env: &mut JNIEnv, o: &mut JObject, x: f32, y: f32) {
     env.set_field(&o, "x", "F", JValue::Float(x))
         .expect("failed to set x");
     env.set_field(&o, "y", "F", JValue::Float(y))
@@ -90,6 +91,18 @@ pub fn arc_from_handle<T>(ptr: jlong) -> Option<Arc<T>> {
         let kernel = ptr as *const T;
         Arc::increment_strong_count(kernel);
         Some(Arc::from_raw(kernel))
+    }
+}
+
+
+pub fn try_arc_from_handle<T>(ptr: jlong) -> Result<Arc<T>> {
+    if ptr == 0 {
+        bail!("invalid handle");
+    }
+    unsafe {
+        let kernel = ptr as *const T;
+        Arc::increment_strong_count(kernel);
+        Ok(Arc::from_raw(kernel))
     }
 }
 

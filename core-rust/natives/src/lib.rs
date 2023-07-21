@@ -3,3 +3,5 @@ mod java_util;
 mod resource;
 mod ui;
 mod window_surface;
+mod errors;
+mod jni_support;

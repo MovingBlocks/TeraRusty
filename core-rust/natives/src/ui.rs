@@ -5,12 +5,13 @@ use std::mem::size_of;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use anyhow::Result;
 use bytemuck::{cast as bytecast, Pod, Zeroable};
 use glam::IVec2;
 use jni::sys::jlong;
 use wgpu::*;
 
-use crate::java_util::{arc_dispose_handle, arc_from_handle, arc_to_handle, JavaHandle};
+use crate::java_util::{arc_dispose_handle, arc_to_handle, JavaHandle, try_arc_from_handle};
 use crate::resource::texture_resource::TextureResource;
 
 #[derive(Copy, Clone, PartialEq)]
@@ -161,8 +162,8 @@ impl Drop for UserInterface {
 }
 
 impl JavaHandle<Arc<RefCell<UserInterface>>> for UserInterface {
-    fn from_handle(ptr: jlong) -> Option<Arc<RefCell<UserInterface>>> {
-        arc_from_handle(ptr)
+    fn from_handle(ptr: jlong) -> Result<Arc<RefCell<UserInterface>>> {
+        try_arc_from_handle(ptr)
     }
 
     fn to_handle(from: Arc<RefCell<UserInterface>>) -> jlong {

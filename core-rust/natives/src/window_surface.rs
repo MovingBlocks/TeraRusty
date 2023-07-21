@@ -1,5 +1,6 @@
 use core::ffi::c_void;
 
+use anyhow::Result;
 use raw_window_handle::{
     HasRawDisplayHandle, HasRawWindowHandle, RawDisplayHandle, RawWindowHandle, Win32WindowHandle,
     WindowsDisplayHandle, XlibDisplayHandle, XlibWindowHandle,
@@ -89,7 +90,7 @@ impl WindowSurface {
         instance: &wgpu::Instance,
         display_ptr: *mut c_void,
         window_ptr: *mut c_void,
-    ) -> WindowSurface {
+    ) -> Result<WindowSurface> {
         struct X11WindowSurface {
             window: XlibWindowHandle,
             display: XlibDisplayHandle,
@@ -115,12 +116,8 @@ impl WindowSurface {
         window.window.window = window_ptr as u64;
         window.display.display = display_ptr as *mut c_void;
 
-        let surface_result = unsafe { instance.create_surface(&window) };
-        let surface = match surface_result {
-            Ok(surface) => surface,
-            Err(err) => panic!("problem creating surface: {:?}", err),
-        };
-        WindowSurface::new(instance, surface).await
+        let surface = unsafe { instance.create_surface(&window) }?;
+        Ok(WindowSurface::new(instance, surface).await)
     }
 
     pub async fn create_window_win32(
