@@ -262,25 +262,6 @@ impl UserInterface {
     pub fn cmd_set_crop(&mut self, rect: Option<Rect>) {
         self.crop = rect;
     }
-
-    pub fn resize_surface(&mut self, device: &wgpu::Device, size: &glam::IVec2) {
-      //  let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
-      //      size: wgpu::Extent3d {
-      //          width: size.x as u32,
-      //          height: size.y as u32,
-      //          depth_or_array_layers: 1,
-      //      },
-      //      mip_level_count: 1,
-      //      sample_count: 1,
-      //      dimension: wgpu::TextureDimension::D2,
-      //      format:wgpu::TextureFormat::Depth16Unorm,
-      //      usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-      //      label: None,
-      //      view_formats: &[],
-      //  });
-      //  self.depth_view.replace(Some(depth_texture.create_view(&wgpu::TextureViewDescriptor::default())));
-    }
-
     fn evaluate_draw_group(&mut self, new_group: UIDrawGroup) -> bool {
         fn test_bound_rects(rects: &[Rect], test: &Rect) -> bool {
             for rec in rects.iter() {

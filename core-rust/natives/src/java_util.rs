@@ -53,6 +53,28 @@ pub trait JavaHandleContainer<T> {
 //    }
 //} 
 
+pub type JNIResult<T> = Result<T, JNIError >;
+
+pub enum JNIError { 
+    Generic(String),
+    //NullException(String)
+}
+
+pub fn to_java_exception<'local>(mut env: JNIEnv<'local>, error: &JNIError) -> jni::errors::Result<JObject<'local>> {
+    match error {
+        JNIError::Generic(err) => {
+            let error_string = env.new_string(err)?;
+            env.new_object(
+                "java/lang/Error",
+                "(Ljava/lang/String;)V",
+                &[
+                    (&error_string).into(),
+                ],
+            )
+        }
+    }
+}
+
 pub fn set_joml_vector2f(mut env: JNIEnv, o: &mut JObject, x: f32, y: f32) {
     env.set_field(&o, "x", "F", JValue::Float(x)).expect("failed to set x");
     env.set_field(&o, "y", "F", JValue::Float(y)).expect("failed to set y");
