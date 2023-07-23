@@ -1,4 +1,7 @@
-use jni::{JNIEnv, objects::JObject, sys::jint};
+use jni::{JNIEnv, objects::{JObject, JClass, JByteBuffer}, sys::{jint, jlong}};
+
+use crate::{resource::texture_resource::TextureResource, ui::JavaHandle, java_util::set_joml_vector2f, engine_kernel::EngineKernel};
+use crate::resource::texture_resource::TextureFormatExt;
 
 pub struct JavaTextureDesc {
    pub width: u32,
@@ -27,7 +30,6 @@ impl JavaTextureDesc {
         }
     }
 }
-
 
 #[repr(u32)]
 pub enum JavaTextureDim {
@@ -96,3 +98,41 @@ impl From<&JavaImageFormat> for wgpu::TextureFormat {
     }
 }
 
+#[no_mangle]
+pub extern "system" fn Java_org_terasology_engine_rust_TeraTexture_00024JNI_drop<'local>(mut _env: JNIEnv<'local>, _class: JClass, texture_ptr: jlong) {
+    TextureResource::drop_handle(texture_ptr); 
+}
+
+#[no_mangle]
+pub extern "system" fn Java_org_terasology_engine_rust_TeraTexture_00024JNI_getSize<'local>(mut env: JNIEnv<'local>, _class: JClass, texture_ptr: jlong, mut vec2_obj: JObject<'local>) {
+    let texture = TextureResource::from_handle(texture_ptr).expect("texture invalid"); 
+    let size = texture.texture.size();
+    set_joml_vector2f(env, &mut vec2_obj, size.width as f32, size.height as f32);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_org_terasology_engine_rust_TeraTexture_00024JNI_writeTextureBuffer<'local>(mut env: JNIEnv<'local>, _class: JClass, kernel_ptr: jlong, texture_ptr: jlong, buffer: JByteBuffer<'local>) {
+    let Some(kernel) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
+    let texture_resource = TextureResource::from_handle(texture_ptr).expect("texture invalid"); 
+
+    let buf_size = env
+        .get_direct_buffer_capacity(&buffer)
+        .expect("Unable to get address to direct buffer. Buffer must be allocated direct.");
+    let buf: _ = env
+        .get_direct_buffer_address(&buffer)
+        .expect("Unable to get address to direct buffer. Buffer must be allocated direct.");
+    let surface = kernel.window_surface.lock().expect("failed to resolve surface");
+    let slice = unsafe {std::slice::from_raw_parts(buf, buf_size)};
+
+    let format = texture_resource.texture.format().bit_size_block() / 8;
+    surface.queue.write_texture(
+        texture_resource.texture.as_image_copy(),
+        &slice,
+        wgpu::ImageDataLayout {
+            offset: 0,
+            bytes_per_row: Some(format),
+            rows_per_image: None,
+        },
+        wgpu::Extent3d::default(),
+    );
+}

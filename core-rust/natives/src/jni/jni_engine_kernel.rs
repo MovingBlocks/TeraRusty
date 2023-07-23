@@ -15,11 +15,11 @@ enum JavaWindowType {
 
 #[no_mangle]
 pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_create<'local>(mut env: JNIEnv<'local>, _class: JClass, desc: JObject<'local>) -> jlong  {
-
-    let windowType = env.get_field(&desc, "windowType", "I").unwrap().i().unwrap() ;
+    let window_type = env.get_field(&desc, "windowType", "I").unwrap().i().unwrap() ;
     let display_ptr = env.get_field(&desc, "displayHandle", "J").unwrap().j().unwrap() ;
     let window_ptr = env.get_field(&desc, "windowHandle", "J").unwrap().j().unwrap() ;
-    let java_window_type : JavaWindowType = unsafe { std::mem::transmute::<jint, JavaWindowType>(windowType) }.into();
+    
+    let java_window_type : JavaWindowType = unsafe { std::mem::transmute::<jint, JavaWindowType>(window_type) }.into();
     
     let window_desc = match java_window_type {
         JavaWindowType::X11 => {
@@ -27,7 +27,7 @@ pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_cre
                window: XlibWindowHandle::empty(),
                display: XlibDisplayHandle::empty() 
             };
-            win.window.window = window_ptr as c_ulong;
+            win.window.window = window_ptr as *mut c_void as c_ulong;
             win.display.display = display_ptr as *mut c_void;
             WindowDesc::X11(win)
         },
@@ -41,7 +41,7 @@ pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_cre
         }
     };
 
-     let mut window_surface_desc = WindowSurfaceDesc {
+    let window_surface_desc: WindowSurfaceDesc = WindowSurfaceDesc {
         window: window_desc 
     };
 
@@ -76,5 +76,5 @@ pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_cmd
 #[no_mangle]
 pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_cmdDispatch(_jni: JNIEnv, _class: JClass, kernel_ptr: jlong) {
     let Some(kernel) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
-    kernel.cmd_prepare();
+    kernel.cmd_dispatch();
 }

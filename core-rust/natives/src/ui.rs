@@ -1,5 +1,6 @@
 
 pub(crate) use crate::java_util::{arc_dispose_handle, arc_from_handle, arc_to_handle, JavaHandle};
+use crate::math::rect::Rect;
 use jni::sys::jlong;
 use std::{borrow::Cow, mem};
 use std::cell::RefCell;
@@ -9,21 +10,6 @@ use std::rc::Rc;
 use std::default::Default;
 
 use crate::resource::texture_resource::TextureResource;
-
-#[derive(Copy, Clone, PartialEq)]
-pub struct Rect {
-    pub min: [f32; 2], 
-    pub max: [f32; 2],
-}
-
-impl Rect {
-    pub fn size(&self) -> [f32; 2] {
-        [
-            self.max[0] - self.min[0],
-            self.max[1] - self.min[1]
-        ]
-    }
-}
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -51,30 +37,6 @@ pub struct GuiTexturePerFrameUniform {
 const VERTEX_BUFFER_INITIAL_SIZE: u64= 1024;
 const INDEX_BUFFER_INITIAL_SIZE: u64 = 1024;
 const RESERVED_TEXTURE_VIEW: usize = 32;
-
-impl Rect {
-    pub fn zero() -> Self{
-        Rect {
-            min: [0.0,0.0],
-            max: [0.0,0.0]
-        }
-    }
-
-    pub fn intersect(&self, rect: &Rect) -> bool{
-        return self.min[0] < rect.max[0] && self.max[0] > rect.min[0] &&
-                self.max[1] > rect.min[1] && self.min[1] < rect.max[1];
-    }
-    
-    pub fn combine(&self, other: &Rect) -> Rect {
-        let mut result = Rect::zero();
-        result.min[0] = if self.min[0] < other.min[0] { self.min[0] } else { other.min[0]};
-        result.min[1] = if self.min[1] < other.min[1] { self.min[1] } else { other.min[1]};
-        result.max[0] = if self.max[0] > other.max[0] { self.max[0] } else { other.max[0]};
-        result.max[1] = if self.max[1] > other.max[1] { self.max[1] } else { other.max[1]};
-        return result;
-    }
-
-}
 
 #[derive(Clone)]
 pub struct TextureDrawGroup {
@@ -138,7 +100,6 @@ pub struct UserInterface {
     textures: smallvec::SmallVec<[(Arc<TextureResource>, wgpu::TextureView); RESERVED_TEXTURE_VIEW]>,
 
 }
-
 
 impl Drop for UserInterface {
     fn drop(&mut self) {

@@ -19,6 +19,5 @@ public class ResourceManager {
     private static class JNI {
         public static native long createTextureResourceFromBuffer(long kernelPtr, TeraTexture.TextureDesc desc, java.nio.ByteBuffer buffer);
         public static native long createTextureResource(long kernelPtr,  TeraTexture.TextureDesc desc);
-
     }
 }

@@ -87,17 +87,8 @@ public class TeraTexture implements Disposable {
 
     }
 
-//    public static TeraTexture create(EngineKernel kernel, TextureDesc desc) {
-////        EngineKernel instance = EngineKernel.instance();
-//        return new TeraTexture(JNI.createTextureResource(kernel.rustKernelPtr, new JNI.TextureDescJNI(desc)));
-//    }
-//    public static TeraTexture createFromBuffer(EngineKernel kernel, TextureDesc desc, java.nio.ByteBuffer buffer) {
-////        EngineKernel instance = EngineKernel.instance();
-//        return new TeraTexture(JNI.createTextureResourceFromBuffer(kernel.rustKernelPtr, new JNI.TextureDescJNI(desc), buffer));
-//    }
 
     public void writeTextureBuffer(java.nio.ByteBuffer buffer) {
-//        EngineKernel instance = EngineKernel.instance();
         JNI.writeTextureBuffer(kernel.rustKernelPtr, this.rustTexturePtr, buffer);
     }
 
@@ -113,28 +104,10 @@ public class TeraTexture implements Disposable {
 
 
     private static final class JNI {
-        // use a byte buffer ...
-//        static final class TextureDescJNI {
-//            public TextureDescJNI(TextureDesc desc) {
-//                this.format = desc.format.ordinal();
-//                this.dim = desc.dim.ordinal();
-//                this.width = desc.width;
-//                this.height = desc.height;
-//                this.layers = desc.layers;
-//            }
-//            public int width;
-//            public int height;
-//            public int layers;
-//            public int dim;
-//            public int format;
-//        }
-
         private static native void drop(long rustPtr);
 
         public static native void getSize(long textureResourcePtr, Vector2f vec);
         public static native void writeTextureBuffer(long kernelPtr, long textureResourcePtr, java.nio.ByteBuffer buffer);
-
-        // Resource
 
     }
 }
