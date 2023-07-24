@@ -13,9 +13,11 @@ import static org.terasology.engine.rust.EngineKernel.CLEANER;
 public class TeraTexture implements Disposable {
     final long rustTexturePtr;
     private final Cleaner.Cleanable cleanable;
+    private final EngineKernel kernel;
     private Vector2f size = new Vector2f();
 
-    TeraTexture(long texturePtr) {
+    TeraTexture(EngineKernel kernel, long texturePtr) {
+        this.kernel = kernel;
         rustTexturePtr = texturePtr;
         this.cleanable = CLEANER.register(this, () -> {
             TeraTexture.JNI.drop(texturePtr);
@@ -51,26 +53,43 @@ public class TeraTexture implements Disposable {
     // Texture Resource
     // TODO: this is what we want to use instead TextureDesc is a generate structure that describes a texture instead of all these methods for creating texture resource
     public static final class TextureDesc {
-        public int width;
-        public int height;
-        public int layers;
+        int width;
+        int height;
+        int layers;
+        int dim;
+        int format;
 
-        public TextureDimension dim;
-        public ImageFormat format;
+        public TextureDesc setWidth(int width) {
+            this.width = width;
+            return this;
+        }
+
+        public TextureDesc setHeight(int height) {
+            this.height = height;
+            return this;
+        }
+
+        public TextureDesc setLayers(int layers) {
+            this.layers = layers;
+            return this;
+        }
+
+        public TextureDesc setFormat(ImageFormat format) {
+            this.format = format.ordinal();
+            return this;
+        }
+
+        public TextureDesc setDim(TextureDimension dim) {
+            this.dim = dim.ordinal();
+            return this;
+        }
+
+
     }
 
-    public static TeraTexture create(TextureDesc desc) {
-        EngineKernel instance = EngineKernel.instance();
-        return new TeraTexture(JNI.createTextureResource(instance.rustKernelPtr, new JNI.TextureDescJNI(desc)));
-    }
-    public static TeraTexture createFromBuffer(TextureDesc desc, java.nio.ByteBuffer buffer) {
-        EngineKernel instance = EngineKernel.instance();
-        return new TeraTexture(JNI.createTextureResourceFromBuffer(instance.rustKernelPtr, new JNI.TextureDescJNI(desc), buffer));
-    }
 
     public void writeTextureBuffer(java.nio.ByteBuffer buffer) {
-        EngineKernel instance = EngineKernel.instance();
-        JNI.writeTextureBuffer(instance.rustKernelPtr, this.rustTexturePtr, buffer);
+        JNI.writeTextureBuffer(kernel.rustKernelPtr, this.rustTexturePtr, buffer);
     }
 
     public Vector2fc getSize() {
@@ -85,31 +104,10 @@ public class TeraTexture implements Disposable {
 
 
     private static final class JNI {
-        // use a byte buffer ...
-        static final class TextureDescJNI {
-            public TextureDescJNI(TextureDesc desc) {
-                this.format = desc.format.ordinal();
-                this.dim = desc.dim.ordinal();
-                this.width = desc.width;
-                this.height = desc.height;
-                this.layers = desc.layers;
-            }
-            public int width;
-            public int height;
-            public int layers;
-            public int dim;
-            public int format;
-        }
-
         private static native void drop(long rustPtr);
 
         public static native void getSize(long textureResourcePtr, Vector2f vec);
         public static native void writeTextureBuffer(long kernelPtr, long textureResourcePtr, java.nio.ByteBuffer buffer);
-
-        // Resource
-        public static native long createTextureResourceFromBuffer(
-                long kernelPtr, TextureDescJNI desc, java.nio.ByteBuffer buffer);
-        public static native long createTextureResource(long kernelPtr, TextureDescJNI desc);
 
     }
 }
