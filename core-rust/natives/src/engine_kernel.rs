@@ -25,7 +25,6 @@ pub struct EngineKernel {
     
    pub user_interface: RefCell<UserInterface>,
    pub frame_encoder: Mutex<Cell<Option<FrameContext>>>
-
 }
 
 pub struct EngineKernelDesc {

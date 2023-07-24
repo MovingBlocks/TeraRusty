@@ -205,7 +205,6 @@ impl UserInterface {
                     UIDrawGroup::Texture(ref tex) => {
                         queue.write_buffer(&tex.vertex_buffer.as_ref(), tex.vertex_offset_start, &tex.vertex_shadow_data);
                         queue.write_buffer(&tex.index_buffer.as_ref(), tex.index_offset_start, &tex.index_shadow_data);
-                       // update_bind_group(&mut texture_bind_groups, tex.texture_index);
 
                         rpass.set_bind_group(1, &texture_bind_groups[tex.texture_index], &[]);
                         rpass.set_pipeline(&self.gui_texture_pipeline);

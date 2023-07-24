@@ -13,7 +13,6 @@ public final class EngineKernel implements Disposable {
     public final UIRenderer ui;
     public final ResourceManager resource;
 
-
     public static final class EngineKernelBuild {
         private long displayHandle;
         private long windowHandle;

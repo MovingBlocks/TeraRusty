@@ -43,12 +43,12 @@ impl Semantic {
 }
 
 pub struct ResourceStream {
-    buf: Rc<wgpu::Buffer>,
+    buf: wgpu::Buffer,
     semantic: Semantic
 }
 
 pub struct IndexStream {
-    buf: Rc<wgpu::Buffer>
+    buf: wgpu::Buffer
 }
 
 pub struct GeometryResource {
