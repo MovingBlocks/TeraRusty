@@ -10,9 +10,9 @@ pub trait JavaHandle<T> {
     fn drop_handle(ptr: jlong); 
 }
 
-pub trait JavaHandleContainer<T> {
-    fn from_handle(&self, ptr: jlong) -> Option<T>;
-    fn to_handle(&self, from: T) -> jlong;
+pub trait JavaHandleContainer<'a, T> {
+    fn from_handle(&self, ptr: jlong) -> Option<&'a T>;
+    fn to_handle(&self, from: &'a T) -> jlong;
 
 }
 

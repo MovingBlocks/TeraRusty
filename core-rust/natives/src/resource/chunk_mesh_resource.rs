@@ -89,7 +89,6 @@ impl ChunkMeshEntry {
     pub fn buf_uvs_slice(&self) -> wgpu::BufferSlice{ self.vertex_buffer.slice(self.uv_start..(self.uv_start + (self.num_elements as u64 * std::mem::size_of::<ChunkUV>() as u64))) }
     pub fn buf_colors_slice(&self) -> wgpu::BufferSlice { self.vertex_buffer.slice(self.color_start..(self.color_start + (self.num_elements as u64 * std::mem::size_of::<ChunkColor>() as u64))) }
     pub fn buf_attributes_slice(&self) -> wgpu::BufferSlice { self.vertex_buffer.slice(self.attribute_start..(self.attribute_start + (self.num_elements as u64 * std::mem::size_of::<ChunkAttributes>() as u64)))}
-
 }
 
 pub struct ChunkMeshResource {
@@ -115,10 +114,6 @@ impl ChunkMeshResource {
         color: &[ChunkColor],
         attributes: &[ChunkAttributes]
         ) {
-       // assert!(position.len() == normal.len(), "mismatch in the number of vertices");
-       // assert!(position.len() == uv.len(), "mismatch in the number of vertices");
-       // assert!(position.len() == color.len(), "mismatch in the number of vertices");
-       // assert!(position.len() == attributes.len(), "mismatch in the number of vertices");
 
         let num_elements: u64 = position.len() as u64;
         let vertex_buffer = device.create_buffer(

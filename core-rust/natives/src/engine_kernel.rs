@@ -1,7 +1,7 @@
 use futures::executor::block_on;
 use jni::sys::jlong;
 use std::sync::Arc;
-use crate::{java_util::{arc_from_handle, arc_to_handle, arc_dispose_handle, JavaHandle}, window_surface::{WindowSurface, WindowSurfaceDesc}, ui::{UserInterface}, math::rect::Rect} ;
+use crate::{java_util::{arc_from_handle, arc_to_handle, arc_dispose_handle, JavaHandle}, window_surface::{WindowSurface, WindowSurfaceDesc}, ui::{UserInterface}, math::rect::Rect, scene::{SceneChunk, Scene}} ;
 use std::cell::RefCell;
 use std::sync::Mutex;
 use std::cell::Cell;
@@ -30,6 +30,7 @@ pub struct EngineKernel {
 pub struct EngineKernelDesc {
    pub surface: WindowSurfaceDesc,
 }
+
 
 impl EngineKernel {
     pub fn new(instance: wgpu::Instance, desc: &EngineKernelDesc) -> Self {
