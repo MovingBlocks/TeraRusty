@@ -46,7 +46,10 @@ pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_cre
         window: window_desc 
     };
 
-    let instance = wgpu::Instance::default();
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
+        ..Default::default()
+    });
     return EngineKernel::to_handle(Arc::new(EngineKernel::new(instance, &EngineKernelDesc {
         surface: window_surface_desc
     })));
