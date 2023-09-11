@@ -18,3 +18,6 @@ slotmap = "1.0.6"
 glam = "0.24.1"
 smallvec = "1.11.0"
 bytemuck = {version = "1.13.1", features = ["derive"]}
+
+log = "0.4.0"
+env_logger = "0.10.0"

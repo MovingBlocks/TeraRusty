@@ -5,3 +5,6 @@ mod ui;
 mod resource;
 mod jni;
 mod math;
+
+#[macro_use]
+extern crate log;

@@ -15,6 +15,7 @@ enum JavaWindowType {
 
 #[no_mangle]
 pub extern "system" fn Java_org_terasology_engine_rust_EngineKernel_00024JNI_create<'local>(mut env: JNIEnv<'local>, _class: JClass, desc: JObject<'local>) -> jlong  {
+    env_logger::init();
     let window_type = env.get_field(&desc, "windowType", "I").unwrap().i().unwrap() ;
     let display_ptr = env.get_field(&desc, "displayHandle", "J").unwrap().j().unwrap() ;
     let window_ptr = env.get_field(&desc, "windowHandle", "J").unwrap().j().unwrap() ;
