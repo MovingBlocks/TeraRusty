@@ -1,16 +1,17 @@
 // Copyright 2023 The Terasology Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-package org.terasology.engine.rust;
+package org.terasology.engine.rust.resource;
 
 import org.joml.Vector2f;
 import org.joml.Vector2fc;
+import org.terasology.engine.rust.Disposable;
+import org.terasology.engine.rust.EngineKernel;
+import org.terasology.engine.rust.RawHandle;
 
 import java.lang.ref.Cleaner;
 
-import static org.terasology.engine.rust.EngineKernel.CLEANER;
-
-public class TeraTexture implements Disposable {
+public class TeraTexture implements Disposable, RawHandle<TeraTexture> {
     final long rustTexturePtr;
     private final Cleaner.Cleanable cleanable;
     private final EngineKernel kernel;
@@ -19,9 +20,14 @@ public class TeraTexture implements Disposable {
     TeraTexture(EngineKernel kernel, long texturePtr) {
         this.kernel = kernel;
         rustTexturePtr = texturePtr;
-        this.cleanable = CLEANER.register(this, () -> {
+        this.cleanable = EngineKernel.CLEANER.register(this, () -> {
             TeraTexture.JNI.drop(texturePtr);
         });
+    }
+
+    @Override
+    public long getHandle() {
+        return this.rustTexturePtr;
     }
 
     public enum TextureDimension {
@@ -89,7 +95,7 @@ public class TeraTexture implements Disposable {
 
 
     public void writeTextureBuffer(java.nio.ByteBuffer buffer) {
-        JNI.writeTextureBuffer(kernel.rustKernelPtr, this.rustTexturePtr, buffer);
+        JNI.writeTextureBuffer(kernel.getHandle(), this.rustTexturePtr, buffer);
     }
 
     public Vector2fc getSize() {
@@ -104,10 +110,10 @@ public class TeraTexture implements Disposable {
 
 
     private static final class JNI {
-        private static native void drop(long rustPtr);
+        static native void drop(long rustPtr);
 
-        public static native void getSize(long textureResourcePtr, Vector2f vec);
-        public static native void writeTextureBuffer(long kernelPtr, long textureResourcePtr, java.nio.ByteBuffer buffer);
+        static native void getSize(long textureResourcePtr, Vector2f vec);
+        static native void writeTextureBuffer(long kernelPtr, long textureResourcePtr, java.nio.ByteBuffer buffer);
 
     }
 }
