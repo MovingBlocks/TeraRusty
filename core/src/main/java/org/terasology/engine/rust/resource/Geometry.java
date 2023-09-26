@@ -1,10 +1,12 @@
 // Copyright 2023 The Terasology Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-package org.terasology.engine.rust;
+package org.terasology.engine.rust.resource;
 
-public class GeometryHandle implements Disposable {
-    GeometryHandle() {
+import org.terasology.engine.rust.Disposable;
+
+public class Geometry implements Disposable {
+    Geometry() {
 
     }
 
@@ -13,7 +15,6 @@ public class GeometryHandle implements Disposable {
     }
 
     private static final class JNI {
-        private static native long create();
         private static native void drop(long rustPtr);
     }
 

@@ -3,15 +3,54 @@
 
 package org.terasology.engine.rust;
 
+import org.terasology.engine.rust.resource.ResourceManager;
+
 import java.lang.ref.Cleaner;
 
-public final class EngineKernel implements Disposable {
-    static final Cleaner CLEANER = Cleaner.create();
-
-    final long rustKernelPtr;
-    private final Cleaner.Cleanable cleanable;
+public final class EngineKernel implements Disposable, RawHandle<EngineKernel> {
+    public static final Cleaner CLEANER = Cleaner.create();
     public final UIRenderer ui;
     public final ResourceManager resource;
+
+    final long rawRustPtr;
+
+    private final Cleaner.Cleanable cleanable;
+
+    static {
+        NativeSupport.load("core_rust");
+    }
+
+    public EngineKernel(EngineKernelBuild builder) {
+        long kernelPtr = JNI.create(builder);
+        this.rawRustPtr = kernelPtr;
+        this.ui = new UIRenderer(this);
+        this.resource = new ResourceManager(this);
+        this.cleanable = CLEANER.register(this, () -> {
+            JNI.drop(kernelPtr);
+        });
+    }
+
+    public void resizeSurface(int width, int height) {
+        JNI.resizeSurface(rawRustPtr, width, height);
+    }
+
+    public void cmdPrepare() {
+        JNI.cmdPrepare(rawRustPtr);
+    }
+
+    public void cmdDispatch() {
+        JNI.cmdDispatch(rawRustPtr);
+    }
+
+    @Override
+    public long getHandle() {
+        return rawRustPtr;
+    }
+
+    @Override
+    public void dispose() {
+        this.cleanable.clean();
+    }
 
     public static final class EngineKernelBuild {
         private long displayHandle;
@@ -38,46 +77,16 @@ public final class EngineKernel implements Disposable {
         }
     }
 
-    public EngineKernel(EngineKernelBuild builder) {
-        long kernelPtr = JNI.create(builder);
-        rustKernelPtr = kernelPtr;
-        this.ui = new UIRenderer(this);
-        this.resource = new ResourceManager(this);
-        this.cleanable = CLEANER.register(this, () -> {
-            JNI.drop(kernelPtr);
-        });
-    }
-
-    static {
-        NativeSupport.load("core_rust");
-    }
-
-
-    public void resizeSurface(int width, int height) {
-        JNI.resizeSurface(rustKernelPtr, width, height);
-    }
-    public void cmdPrepare() {
-        JNI.cmdPrepare(rustKernelPtr);
-    }
-    public void cmdDispatch() {
-        JNI.cmdDispatch(rustKernelPtr);
-    }
-
-    @Override
-    public void dispose() {
-        this.cleanable.clean();
-    }
-
     private static final class JNI {
         private static native long create(EngineKernelBuild builder);
 
         private static native void drop(long rustPtr);
 
         private static native void resizeSurface(long kernel, int width, int height);
+
         private static native void cmdPrepare(long kernel);
+
         private static native void cmdDispatch(long kernel);
-
-
     }
 }
 

@@ -1,11 +1,11 @@
 use jni::{sys::jlong, objects::{JClass, JByteBuffer, JObject}, JNIEnv};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use wgpu::util::DeviceExt;
-use crate::{resource::texture_resource::TextureResource, ui::JavaHandle, engine_kernel::EngineKernel};
+use crate::{resource::{texture_resource::TextureResource, chunk_mesh_resource::ChunkMeshResource}, ui::JavaHandle, engine_kernel::EngineKernel};
 use super::jni_texture::JavaTextureDesc;
 
 #[no_mangle]
-pub extern "system" fn Java_org_terasology_engine_rust_ResourceManager_00024JNI_createTextureResourceFromBuffer<'local>(mut env: JNIEnv<'local>, _class: JClass, kernel_ptr: jlong, desc: JObject<'local>, buffer: JByteBuffer<'local>) -> jlong {
+pub extern "system" fn Java_org_terasology_engine_rust_resource_ResourceManager_00024JNI_createTextureResourceFromBuffer<'local>(mut env: JNIEnv<'local>, _class: JClass, kernel_ptr: jlong, desc: JObject<'local>, buffer: JByteBuffer<'local>) -> jlong {
     let texture_desc = JavaTextureDesc::new(&mut env, desc);
     let wgpu_texture_desc = wgpu::TextureDescriptor {
         size: wgpu::Extent3d {
@@ -41,7 +41,7 @@ pub extern "system" fn Java_org_terasology_engine_rust_ResourceManager_00024JNI_
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_terasology_engine_rust_ResourceManager_00024JNI_createTextureResource<'local>(mut env: JNIEnv<'local>, _class: JClass, kernel_ptr: jlong, desc: JObject<'local>) -> jlong {
+pub extern "system" fn Java_org_terasology_engine_rust_resource_ResourceManager_00024JNI_createTextureResource<'local>(mut env: JNIEnv<'local>, _class: JClass, kernel_ptr: jlong, desc: JObject<'local>) -> jlong {
     let texture_desc = JavaTextureDesc::new(&mut env, desc);
     let wgpu_texture_desc = wgpu::TextureDescriptor {
         size: wgpu::Extent3d {
@@ -67,3 +67,7 @@ pub extern "system" fn Java_org_terasology_engine_rust_ResourceManager_00024JNI_
     }))
 }
 
+#[no_mangle]
+pub extern "system" fn Java_org_terasology_engine_rust_resource_ResourceManager_00024JNI_createChunkResource<'local>(_env: JNIEnv<'local>, _class: JClass, _kernel_ptr: jlong) -> jlong {
+    return ChunkMeshResource::to_handle(Arc::new(Mutex::new(ChunkMeshResource::new())))
+}

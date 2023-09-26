@@ -99,19 +99,19 @@ impl From<&JavaImageFormat> for wgpu::TextureFormat {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_terasology_engine_rust_TeraTexture_00024JNI_drop<'local>(mut _env: JNIEnv<'local>, _class: JClass, texture_ptr: jlong) {
+pub extern "system" fn Java_org_terasology_engine_rust_resource_TeraTexture_00024JNI_drop<'local>(mut _env: JNIEnv<'local>, _class: JClass, texture_ptr: jlong) {
     TextureResource::drop_handle(texture_ptr); 
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_terasology_engine_rust_TeraTexture_00024JNI_getSize<'local>(mut env: JNIEnv<'local>, _class: JClass, texture_ptr: jlong, mut vec2_obj: JObject<'local>) {
+pub extern "system" fn Java_org_terasology_engine_rust_resource_TeraTexture_00024JNI_getSize<'local>(mut env: JNIEnv<'local>, _class: JClass, texture_ptr: jlong, mut vec2_obj: JObject<'local>) {
     let texture = TextureResource::from_handle(texture_ptr).expect("texture invalid"); 
     let size = texture.texture.size();
     set_joml_vector2f(env, &mut vec2_obj, size.width as f32, size.height as f32);
 }
 
 #[no_mangle]
-pub extern "system" fn Java_org_terasology_engine_rust_TeraTexture_00024JNI_writeTextureBuffer<'local>(mut env: JNIEnv<'local>, _class: JClass, kernel_ptr: jlong, texture_ptr: jlong, buffer: JByteBuffer<'local>) {
+pub extern "system" fn Java_org_terasology_engine_rust_resource_TeraTexture_00024JNI_writeTextureBuffer<'local>(mut env: JNIEnv<'local>, _class: JClass, kernel_ptr: jlong, texture_ptr: jlong, buffer: JByteBuffer<'local>) {
     let Some(kernel) = EngineKernel::from_handle(kernel_ptr) else { panic!("kernel invalid") };
     let texture_resource = TextureResource::from_handle(texture_ptr).expect("texture invalid"); 
 
