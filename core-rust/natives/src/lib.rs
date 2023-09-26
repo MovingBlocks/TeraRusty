@@ -5,7 +5,7 @@ mod ui;
 mod resource;
 mod jni;
 mod math;
-
+mod index_pool;
 #[macro_use]
 extern crate log;
 mod scene;
