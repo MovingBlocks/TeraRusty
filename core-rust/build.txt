@@ -12,6 +12,8 @@ plugins {
 //}
 
 import org.apache.tools.ant.taskdefs.condition.Os
+import org.codehaus.groovy.runtime.GStringImpl
+
 ext {
     if(Os.isFamily(Os.FAMILY_MAC)) {
 //        natives = ["macosx_amd64_clang"]
@@ -27,7 +29,10 @@ ext {
         throw new GradleException("Unsupported platform")
     }
 
-    baseDir = "$rootDir/core-rust"
+
+    baseDir = "$rootDir/core-rust" as GStringImpl
+
+    System.out.println("BASE DIR AFTER " + baseDir )
 }
 
 version = "0.0.1"

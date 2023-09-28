@@ -1,12 +1,10 @@
 
-apply plugin: 'idea'
-
-wrapper {
-    gradleVersion = '6.8.2'
+plugins {
+    idea apply true
 }
 
 // Using this instead of allprojects allows this project to be embedded yet not affect parent projects
-group = 'org.terasology'
+group = "org.terasology"
 subprojects {
-    group = 'org.terasology.rust'
+    group = "org.terasology.rust"
 }
