@@ -107,14 +107,13 @@ tasks.register<Zip>("zipNatives") {
     archiveBaseName.set("core-rust")
 
     dependsOn("buildNatives")
+    artifacts.add("default", "zipNatives")
 }
 
+tasks.named("publish") {
+    dependsOn("zipNatives")
+}
 
-// artifacts.add("default", zipNatives)
-
-//publish {
-//    dependsOn zipNatives
-//}
 //
 //// Define the artifacts we want to publish (the .pom will also be included since the Maven plugin is active)
 //publishing {
