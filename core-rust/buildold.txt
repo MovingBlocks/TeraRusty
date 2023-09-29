@@ -12,8 +12,6 @@ plugins {
 //}
 
 import org.apache.tools.ant.taskdefs.condition.Os
-import org.codehaus.groovy.runtime.GStringImpl
-
 ext {
     if(Os.isFamily(Os.FAMILY_MAC)) {
 //        natives = ["macosx_amd64_clang"]
@@ -29,10 +27,7 @@ ext {
         throw new GradleException("Unsupported platform")
     }
 
-
-    baseDir = "$rootDir/core-rust" as GStringImpl
-
-    System.out.println("BASE DIR AFTER " + baseDir )
+    baseDir = "$rootDir/core-rust"
 }
 
 version = "0.0.1"
@@ -95,7 +90,7 @@ task buildNatives{
 // TODO: outputs are not defined well enough yet for Gradle to skip this if already done (maybe more the natives task?)
 task zipNatives(type: Zip){
     description 'Creates a zip archive that contains all TeraBullet native files'
-     from ("$baseDir/build/natives") {
+    from ("$baseDir/build/natives") {
         include '*linux*'
         into "linux"
     }

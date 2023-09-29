@@ -15,21 +15,22 @@ plugins {
 //}
 
 val natives = mutableMapOf<String, String>()
-val baseDir = "$rootDir/core-rust"
+val baseDir = "${projectDir.toString()}"
 
 
-if (Os.isFamily(Os.FAMILY_MAC)) {
+ext {
+    if (Os.isFamily(Os.FAMILY_MAC)) {
 //        natives = listOf("macosx_amd64_clang")
-} else if (Os.isFamily(Os.FAMILY_UNIX)) {
-    natives["target"] = "x86_64-unknown-linux-gnu"
-    natives["module"] = "linux-amd64"
-} else if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-    natives["target"] = "x86_64-pc-windows-msvc"
-    natives["module"] = "windows-amd64"
-} else {
-    throw GradleException("Unsupported platform")
+    } else if (Os.isFamily(Os.FAMILY_UNIX)) {
+        natives["target"] = "x86_64-unknown-linux-gnu"
+        natives["module"] = "linux-amd64"
+    } else if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+        natives["target"] = "x86_64-pc-windows-msvc"
+        natives["module"] = "windows-amd64"
+    } else {
+        throw GradleException("Unsupported platform")
+    }
 }
-
 
 version = "0.0.1"
 group = "org.terasology.rust"
@@ -60,7 +61,7 @@ repositories {
 tasks.register<Exec>(name = "native_${natives["target"]}") {
     description = "cargo ${natives["target"]} "
     executable = "cargo"
-    workingDir("${baseDir}/natives")
+    workingDir("$baseDir/natives")
     args = listOf("build", "--target=${natives["target"]}")
     doFirst {
         mkdir("$baseDir/build/natives")
@@ -79,15 +80,16 @@ tasks.register<Exec>(name = "native_${natives["target"]}") {
 
 
 tasks.register("buildNatives") {
-    dependsOn(fileTree("$baseDir/natives")) // Input directory containing the source files
     description = "Builds Natives"
+    dependsOn(fileTree("$baseDir/natives")) // Input directory containing the source files
     dependsOn("native_${natives["target"]}")
-
 }
 
 // TODO: outputs are not defined well enough yet for Gradle to skip this if already done (maybe more the natives task?)
-tasks.register<Zip>("zipNatives") {
+val zipNatives by tasks.creating(Zip::class) {
     description = "Creates a zip archive that contains all TeraBullet native files"
+    dependsOn("buildNatives")
+
     from("$baseDir/build/natives") {
         include("*linux*")
         into("linux")
@@ -105,63 +107,94 @@ tasks.register<Zip>("zipNatives") {
 
     destinationDirectory.set(file(layout.buildDirectory))
     archiveBaseName.set("core-rust")
-
-    dependsOn("buildNatives")
-    artifacts.add("default", "zipNatives")
 }
 
-tasks.named("publish") {
+artifacts.add("default", zipNatives)
+//tasks.register<Zip>("zipNatives") {
+//    description = "Creates a zip archive that contains all TeraBullet native files"
+//    dependsOn("buildNatives")
+//
+//    from("$baseDir/build/natives") {
+//        include("*linux*")
+//        into("linux")
+//    }
+//
+//    from("$baseDir/build/natives") {
+//        include("*osx*")
+//        into("macosx")
+//    }
+//
+//    from("$baseDir/build/natives") {
+//        include("*windows*")
+//        into("windows")
+//    }
+//
+//    destinationDirectory.set(file(layout.buildDirectory))
+//    archiveBaseName.set("core-rust")
+//    artifacts.add("default", archiveFile)
+//}
+
+tasks.getByName("publish") {
     dependsOn("zipNatives")
 }
 
-//
-//// Define the artifacts we want to publish (the .pom will also be included since the Maven plugin is active)
-//publishing {
-//    publications {
-//        "TeraRustyCoreRust"(MavenPublication) {
-//            // Without this we get a .pom with no dependencies
-//            artifact zipNatives
-//
-//                    repositories {
-//                        maven {
-//                            name = "TerasologyOrg"
-//                            allowInsecureProtocol true // 😱 - no https on our Artifactory yet
-//
-//                            if (rootProject.hasProperty("publishRepo")) {
-//                                // This first option is good for local testing, you can set a full explicit target repo in gradle.properties
-//                                url = "http://artifactory.terasology.org/artifactory/$publishRepo"
-//
-//                                logger.info("Changing PUBLISH repoKey set via Gradle property to {}", publishRepo)
-//                            } else {
-//                                // Support override from the environment to use a different target publish org
-//                                val deducedPublishRepo: String = System.getenv()listOf("PUBLISH_ORG")
-//                                if (deducedPublishRepo == null || deducedPublishRepo == "") {
-//                                    // If not then default
-//                                    deducedPublishRepo = "libs"
-//                                }
-//
-//                                // Base final publish repo on whether we"re building a snapshot or a release
-//                                if (project.version.endsWith("SNAPSHOT")) {
-//                                    deducedPublishRepo += "-snapshot-local"
-//                                } else {
-//                                    deducedPublishRepo += "-release-local"
-//                                }
-//
-//                                logger.info("The final deduced publish repo is {}", deducedPublishRepo)
-//                                url = "http://artifactory.terasology.org/artifactory/$deducedPublishRepo"
-//                            }
-//
-//                            if (rootProject.hasProperty("mavenUser") && rootProject.hasProperty("mavenPass")) {
-//                                credentials {
-//                                    username = "$mavenUser"
-//                                    password = "$mavenPass"
-//                                }
-//                                authentication {
-//                                    basic(BasicAuthentication)
-//                                }
-//                            }
-//                        }
-//                    }
-//        }
-//    }
-//}
+tasks.build {
+    dependsOn("buildNatives")
+    dependsOn("zipNatives")
+}
+
+// Define the artifacts we want to publish (the .pom will also be included since the Maven plugin is active)
+
+publishing {
+    publications {
+        create<MavenPublication>("TeraRustyCoreRust") {
+            artifact(zipNatives)
+            repositories {
+                maven {
+                    name = "TerasologyOrg"
+                    isAllowInsecureProtocol = true
+                    if (project.hasProperty("publishRepo")) {
+                        val publishRepo = project.property("publishRepo")
+                        // This first option is good for local testing, you can set a full explicit target repo in gradle.properties
+                        url = URI("http://artifactory.terasology.org/artifactory/$publishRepo")
+                        logger.info("Changing PUBLISH repoKey set via Gradle property to $publishRepo")
+                    } else {
+                        // Support override from the environment to use a different target publish org
+                        var deducedPublishRepo: String? = System.getenv()["PUBLISH_ORG"]
+                        if (deducedPublishRepo.isNullOrEmpty()) {
+                            // If not then default
+                            deducedPublishRepo = "libs"
+                        }
+
+                        // Base final publish repo on whether we're building a snapshot or a release
+
+                        if (project.version.toString().endsWith("SNAPSHOT")) {
+                            deducedPublishRepo += "-snapshot-local"
+                        } else {
+                            deducedPublishRepo += "-release-local"
+                        }
+
+                        logger.info("The final deduced publish repo is {}", deducedPublishRepo)
+                        url = URI("http://artifactory.terasology.org/artifactory/$deducedPublishRepo")
+                    }
+                    if (project.hasProperty("mavenUser") && project.hasProperty("mavenPass")) {
+                        credentials {
+                            val mavenUser =
+                                project.property("mavenUser") as? String
+                                    ?: throw RuntimeException("Not a valid maven user")
+                            val mavenPass =
+                                project.property("mavenPass") as? String
+                                    ?: throw RuntimeException("Not a valid maven pass")
+                            username = mavenUser
+                            password = mavenPass
+
+                            authentication {
+                                create<BasicAuthentication>("basic")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
