@@ -1,36 +1,20 @@
-import org.apache.tools.ant.taskdefs.condition.Os
 import java.net.URI
 
 plugins {
     id("base")
+    id("java-library")
     id("maven-publish")
 }
 
-//configurations {
-//    rust
-//}
-//
-//dependencies {
-//    rust(fileTree("natives") { include ("*.rs")})
-//}
-
-val natives = mutableMapOf<String, String>()
 val baseDir = "${projectDir.toString()}"
 
-
-ext {
-    if (Os.isFamily(Os.FAMILY_MAC)) {
-//        natives = listOf("macosx_amd64_clang")
-    } else if (Os.isFamily(Os.FAMILY_UNIX)) {
-        natives["target"] = "x86_64-unknown-linux-gnu"
-        natives["module"] = "linux-amd64"
-    } else if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-        natives["target"] = "x86_64-pc-windows-msvc"
-        natives["module"] = "windows-amd64"
-    } else {
-        throw GradleException("Unsupported platform")
-    }
+dependencies {
+    api("org.joml:joml:1.10.0")
+    api("org.slf4j:slf4j-api:1.7.21")
+    api("net.sf.trove4j:trove4j:3.0.3")
+    api("org.terasology.joml-ext:joml-geometry:0.1.0")
 }
+
 
 version = "0.0.1"
 group = "org.terasology.rust"
@@ -38,7 +22,6 @@ group = "org.terasology.rust"
 // We use both Maven Central and our own Artifactory instance, which contains module builds, extra libs, and so on
 repositories {
     mavenCentral()
-
     // Terasology Artifactory instance for libs not readily available elsewhere plus our own libs
     maven {
         val repoViaEnv = System.getenv()["RESOLUTION_REPO"]
@@ -58,74 +41,56 @@ repositories {
     }
 }
 
-tasks.register<Exec>(name = "native_${natives["target"]}") {
-    description = "cargo ${natives["target"]} "
-    executable = "cargo"
-    workingDir("$baseDir/natives")
-    args = listOf("build", "--target=${natives["target"]}")
-    doFirst {
-        mkdir("$baseDir/build/natives")
-    }
-    doLast {
-        copy {
-            from("$baseDir/natives/target/${natives["target"]}/debug")
-            include("*.so")
-            include("*.dll")
-            rename("(.+).so", "\$1-${natives["module"]}.so")
-            rename("(.+).dll", "lib\$1-${natives["module"]}.dll")
-            into("$baseDir/build/natives")
-        }
-    }
+val doc by tasks.creating(Javadoc::class) {
+    isFailOnError = false
 }
 
-
-tasks.register("buildNatives") {
-    description = "Builds Natives"
-    dependsOn(fileTree("$baseDir/natives")) // Input directory containing the source files
-    dependsOn("native_${natives["target"]}")
+val sourceJar by tasks.creating(Jar::class) {
+    description = "Create a JAR with all sources"
+    from(sourceSets.main.get().allSource)
+    from(sourceSets.test.get().allSource)
 }
-
-// TODO: outputs are not defined well enough yet for Gradle to skip this if already done (maybe more the natives task?)
-val zipNatives by tasks.creating(Zip::class) {
-    description = "Creates a zip archive that contains all TeraBullet native files"
-    dependsOn("buildNatives")
-
-    from("$baseDir/build/natives") {
-        include("*linux*")
-        into("linux")
-    }
-
-    from("$baseDir/build/natives") {
-        include("*osx*")
-        into("macosx")
-    }
-
-    from("$baseDir/build/natives") {
-        include("*windows*")
-        into("windows")
-    }
-
-    destinationDirectory.set(file(layout.buildDirectory))
-    archiveBaseName.set("core-rust")
+val javaDocJar by tasks.creating(Jar::class) {
+    dependsOn("javadoc")
+    description = "Create a JAR with the JavaDoc for the java sources"
+    from(doc.destinationDir)
 }
-
-artifacts.add("default", zipNatives)
 
 tasks.getByName("publish") {
-    dependsOn("zipNatives")
+    dependsOn(sourceJar, javaDocJar)
 }
-
-tasks.build {
-    dependsOn("buildNatives")
-    dependsOn("zipNatives")
-}
-
-// Define the artifacts we want to publish (the .pom will also be included since the Maven plugin is active)
 
 publishing {
     publications {
-        create<MavenPublication>("TeraRustyCoreRust") {
-            artifact(zipNatives)
+        create<MavenPublication>("TeraRustyCore") {
+            // Without this we get a .pom with no dependencies
+            from(components["java"])
+            artifacts {
+                artifact(sourceJar)
+                artifact(javaDocJar)
+            }
+
+            pom.withXml {
+                asNode().apply {
+                    appendNode("name", "core")
+                    appendNode("description", "A Java Native Terasology Core Wrapper")
+                    appendNode("url", "http://www.example.com/project")
+                    appendNode("licenses").appendNode("license").apply {
+                        appendNode("name", "The Apache License, Version 2.0")
+                        appendNode("url", "http://www.apache.org/licenses/LICENSE-2.0.txt")
+                    }
+                    appendNode("developers").appendNode("developer").apply {
+                        appendNode("id", "michaelpollind")
+                        appendNode("name", "Michael Pollind")
+                        appendNode("email","mpollind@gmail.com")
+                    }
+                    appendNode("scm").apply {
+                        appendNode("connection", "https://github.com/MovingBlocks/JNBullet")
+                        appendNode("developerConnection", "git@github.com:MovingBlocks/JNBullet.git")
+                        appendNode("url", "https://github.com/MovingBlocks/JNBullet")
+                    }
+                }
+            }
             repositories {
                 maven {
                     name = "TerasologyOrg"
