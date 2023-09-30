@@ -15,7 +15,7 @@ plugins {
 //}
 
 val natives = mutableMapOf<String, String>()
-val baseDir = "${projectDir.toString()}"
+val baseDir = projectDir.toString()
 
 
 ext {

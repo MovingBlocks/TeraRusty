@@ -6,7 +6,7 @@ plugins {
     id("maven-publish")
 }
 
-val baseDir = "${projectDir.toString()}"
+val baseDir = projectDir.toString()
 
 dependencies {
     api("org.joml:joml:1.10.0")
@@ -82,7 +82,7 @@ publishing {
                     appendNode("developers").appendNode("developer").apply {
                         appendNode("id", "michaelpollind")
                         appendNode("name", "Michael Pollind")
-                        appendNode("email","mpollind@gmail.com")
+                        appendNode("email", "mpollind@gmail.com")
                     }
                     appendNode("scm").apply {
                         appendNode("connection", "https://github.com/MovingBlocks/JNBullet")
