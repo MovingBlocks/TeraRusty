@@ -41,19 +41,22 @@ repositories {
     }
 }
 
-val doc by tasks.creating(Javadoc::class) {
+val doctask by tasks.creating(Javadoc::class) {
     isFailOnError = false
 }
 
+val javaDocJar by tasks.creating(Jar::class) {
+    archiveClassifier.set("javadoc")
+    dependsOn(doctask)
+    description = "Create a JAR with the JavaDoc for the java sources"
+    from(doctask.destinationDir)
+}
+
 val sourceJar by tasks.creating(Jar::class) {
+    archiveClassifier.set("sources")
     description = "Create a JAR with all sources"
     from(sourceSets.main.get().allSource)
     from(sourceSets.test.get().allSource)
-}
-val javaDocJar by tasks.creating(Jar::class) {
-    dependsOn("javadoc")
-    description = "Create a JAR with the JavaDoc for the java sources"
-    from(doc.destinationDir)
 }
 
 tasks.getByName("publish") {
@@ -69,7 +72,6 @@ publishing {
                 artifact(sourceJar)
                 artifact(javaDocJar)
             }
-
             pom.withXml {
                 asNode().apply {
                     appendNode("name", "core")
